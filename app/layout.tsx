@@ -17,6 +17,11 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Ederaxy",
   description: "First dignified learning platform",
+  icons: {
+    icon: "/logo/favicon.ico",
+    shortcut: "/logo/icon.png",
+    apple: "/logo/favicon-apple.ico.png",
+  },
 };
 
 export default function RootLayout({
