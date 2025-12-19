@@ -37,10 +37,15 @@ export function UploadLessonVideoModal({
   const [stage, setStage] = useState<UploadStage>("select");
   const [progress, setProgress] = useState(0);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [thumbnailFile, setThumbnailFile] = useState<File | null>(null);
+  const [thumbnailPreviewUrl, setThumbnailPreviewUrl] = useState<string | null>(
+    null
+  );
   const [createdVideoId, setCreatedVideoId] = useState<ObjectIdString | null>(
     null
   );
   const [simulateFailure, setSimulateFailure] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const phaseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -62,8 +67,14 @@ export function UploadLessonVideoModal({
       setStage("select");
       setProgress(0);
       setSelectedFile(null);
+      setThumbnailFile(null);
+      setThumbnailPreviewUrl((previous) => {
+        if (previous) URL.revokeObjectURL(previous);
+        return null;
+      });
       setCreatedVideoId(null);
       setSimulateFailure(false);
+      setError(null);
     }
 
     return () => {
@@ -71,13 +82,35 @@ export function UploadLessonVideoModal({
     };
   }, [open]);
 
-  const startFlow = (file: File) => {
+  useEffect(() => {
+    if (!thumbnailFile) {
+      setThumbnailPreviewUrl((previous) => {
+        if (previous) URL.revokeObjectURL(previous);
+        return null;
+      });
+      return;
+    }
+
+    const url = URL.createObjectURL(thumbnailFile);
+    setThumbnailPreviewUrl((previous) => {
+      if (previous) URL.revokeObjectURL(previous);
+      return url;
+    });
+
+    return () => {
+      URL.revokeObjectURL(url);
+    };
+  }, [thumbnailFile]);
+
+  const startFlow = (file: File, thumbnail: File) => {
     if (!lessonId) return;
 
     clearTimers();
 
     const now = new Date().toISOString();
     const newVideoId = generateObjectId();
+
+    const persistedThumbnailUrl = thumbnailPreviewUrl ?? undefined;
 
     setVideos((prev) => {
       const withoutOld = lesson?.video
@@ -91,6 +124,8 @@ export function UploadLessonVideoModal({
         originalFileName: file.name,
         mimeType: file.type || "video/mp4",
         size: file.size,
+        thumbnailUrl: persistedThumbnailUrl,
+        thumbnailOriginalFileName: thumbnail.name,
         storageKey: `local/${newVideoId}/${file.name}`,
         originalPath: `/local/${newVideoId}/${file.name}`,
         hlsDirectory: `/local/${newVideoId}/hls`,
@@ -209,7 +244,27 @@ export function UploadLessonVideoModal({
     const file = event.target.files?.[0] ?? null;
     if (!file) return;
     setSelectedFile(file);
-    startFlow(file);
+    setError(null);
+  };
+
+  const handleThumbnailChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0] ?? null;
+    if (!file) return;
+    setThumbnailFile(file);
+    setError(null);
+  };
+
+  const handleStartUpload = () => {
+    setError(null);
+    if (!selectedFile) {
+      setError("Please select a video file.");
+      return;
+    }
+    if (!thumbnailFile) {
+      setError("Please select a thumbnail image.");
+      return;
+    }
+    startFlow(selectedFile, thumbnailFile);
   };
 
   const activeVideo = useMemo(() => {
@@ -250,11 +305,9 @@ export function UploadLessonVideoModal({
       <div className="space-y-5">
         {stage === "select" ? (
           <div className="space-y-4">
-            <div>
-              <p className="text-sm text-white/70">
-                Choose an MP4/MOV/WEBM file. This is UI-only for now.
-              </p>
-            </div>
+            <p className="text-sm text-white/70">
+              Choose a video file and a thumbnail image.
+            </p>
 
             <label className="block rounded-2xl border border-dashed border-white/15 bg-[#0f1117] px-6 py-8 text-center">
               <input
@@ -267,10 +320,59 @@ export function UploadLessonVideoModal({
                 Click to select video
               </span>
               <span className="mt-2 block text-xs text-white/50">
-                The upload + processing is simulated and will update lesson
-                video status.
+                Video upload is simulated for now.
               </span>
             </label>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="rounded-2xl border border-white/10 bg-[#0f1117] p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.26em] text-white/50">
+                  Thumbnail (required)
+                </p>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleThumbnailChange}
+                  className="mt-3 w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white file:mr-4 file:rounded-full file:border-0 file:bg-white file:px-4 file:py-2 file:text-sm file:font-semibold file:text-black"
+                />
+                <p className="mt-2 text-xs text-white/40">
+                  JPG/PNG recommended.
+                </p>
+              </div>
+
+              <div className="overflow-hidden rounded-2xl border border-white/10 bg-[#0f1117]">
+                <div className="aspect-video bg-black/30">
+                  {thumbnailPreviewUrl ? (
+                    <img
+                      src={thumbnailPreviewUrl}
+                      alt={thumbnailFile?.name ?? "thumbnail"}
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-full items-center justify-center text-sm text-white/40">
+                      Thumbnail preview
+                    </div>
+                  )}
+                </div>
+                <div className="px-4 py-3 text-xs text-white/50">
+                  {thumbnailFile ? thumbnailFile.name : "No thumbnail selected"}
+                </div>
+              </div>
+            </div>
+
+            {selectedFile ? (
+              <p className="text-xs text-white/50">
+                Video selected: {selectedFile.name}
+              </p>
+            ) : null}
+
+            <button
+              type="button"
+              onClick={handleStartUpload}
+              className="w-full rounded-full bg-emerald-400 px-6 py-3 text-sm font-semibold text-emerald-950 transition hover:bg-emerald-300"
+            >
+              Start upload
+            </button>
 
             <label className="flex items-center gap-3 rounded-xl border border-white/10 bg-[#0f1117] px-4 py-3 text-sm text-white/70">
               <input
@@ -281,6 +383,8 @@ export function UploadLessonVideoModal({
               />
               Simulate failure
             </label>
+
+            {error ? <p className="text-sm text-rose-200">{error}</p> : null}
           </div>
         ) : null}
 
@@ -297,7 +401,7 @@ export function UploadLessonVideoModal({
               />
             </div>
             <p className="mt-3 text-xs text-white/50">
-              Linking video to lesson and creating an encoding job.
+              Uploading and creating an encoding job.
             </p>
           </div>
         ) : null}

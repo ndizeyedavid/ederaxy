@@ -110,6 +110,8 @@ export interface Video {
   originalFileName: string;
   mimeType: string;
   size: number;
+  thumbnailUrl?: string;
+  thumbnailOriginalFileName?: string;
   storageKey: string;
   originalPath: string;
   hlsDirectory: string;

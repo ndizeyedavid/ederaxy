@@ -12,16 +12,13 @@ import "ag-grid-community/styles/ag-grid.css";
 import "ag-grid-community/styles/ag-theme-quartz.css";
 import ContentNavigation from "@/components/Dashboard/ContentNavigation";
 import { EntityHeader } from "@/components/TeacherContent/EntityHeader";
+import { useTeacherContentStore } from "@/components/TeacherContent/TeacherContentProvider";
 import { VideoStatusBadge } from "@/components/TeacherContent/VideoStatusBadge";
-import {
-  getLessonsForCourse,
-  getSubjectById,
-  getVideoForLesson,
-  mockCourses,
-  type Course,
-  type Lesson,
-  type Video,
-  type VideoStatus,
+import type {
+  Course,
+  Lesson,
+  Video,
+  VideoStatus,
 } from "@/lib/mock/teacherData";
 
 ModuleRegistry.registerModules([AllCommunityModule]);
@@ -33,10 +30,26 @@ interface LessonVideoRow {
   courseId: string;
   courseTitle: string;
   subjectTitle: string;
+  thumbnailUrl?: string;
   status: VideoStatus | "none";
   durationSeconds: number | null;
   updatedAt: string;
   failureReason?: string;
+}
+
+function ThumbnailCell({ data }: ICellRendererParams<LessonVideoRow>) {
+  const row = data!;
+  const url = row.thumbnailUrl;
+
+  return url ? (
+    <img
+      src={url}
+      alt="thumbnail"
+      className="h-12 w-20 rounded-lg border border-white/10 object-cover"
+    />
+  ) : (
+    <div className="h-12 w-20 rounded-lg border border-white/10 bg-white/5" />
+  );
 }
 
 function LessonVideoCell({ data }: ICellRendererParams<LessonVideoRow>) {
@@ -99,22 +112,26 @@ function UpdatedCell({ value }: ICellRendererParams<LessonVideoRow, string>) {
 }
 
 export default function ContentVideosPage() {
+  const { courses, lessons, videos, subjects } = useTeacherContentStore();
+
   const rows = useMemo<LessonVideoRow[]>(() => {
     const resolveCourseContext = (course: Course) => {
-      const subject = getSubjectById(course.subject);
+      const subject = subjects.find((s) => s._id === course.subject) ?? null;
       const subjectTitle = subject?.title ?? "Subject";
       return { subjectTitle };
     };
 
     const allRows: LessonVideoRow[] = [];
 
-    mockCourses.forEach((course) => {
+    courses.forEach((course) => {
       const { subjectTitle } = resolveCourseContext(course);
-      const lessons = getLessonsForCourse(course._id);
+      const courseLessons = lessons.filter(
+        (lesson) => lesson.course === course._id
+      );
 
-      lessons.forEach((lesson: Lesson) => {
+      courseLessons.forEach((lesson: Lesson) => {
         const video: Video | null = lesson.video
-          ? getVideoForLesson(lesson._id)
+          ? videos.find((v) => v.lesson === lesson._id) ?? null
           : null;
         allRows.push({
           id: lesson._id,
@@ -123,6 +140,7 @@ export default function ContentVideosPage() {
           courseId: course._id,
           courseTitle: course.title,
           subjectTitle,
+          thumbnailUrl: video?.thumbnailUrl,
           status: video?.status ?? "none",
           durationSeconds: video?.duration ?? null,
           updatedAt: (video?.updatedAt ?? lesson.updatedAt) as string,
@@ -132,7 +150,7 @@ export default function ContentVideosPage() {
     });
 
     return allRows.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
-  }, []);
+  }, [courses, lessons, subjects, videos]);
 
   const columnDefs = useMemo<ColDef<LessonVideoRow>[]>(
     () => [
@@ -148,6 +166,13 @@ export default function ContentVideosPage() {
         suppressMenu: true,
         filter: true,
         pinned: "left",
+      },
+      {
+        headerName: "Thumbnail",
+        field: "thumbnailUrl",
+        cellRenderer: ThumbnailCell,
+        minWidth: 140,
+        sortable: false,
       },
       {
         headerName: "Lesson",
