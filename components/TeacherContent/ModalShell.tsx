@@ -35,7 +35,7 @@ export function ModalShell({
           {children}
         </div>
         {footer ? (
-          <footer className="shrink-0 flex items-center justify-end gap-3 border-t border-white/5 px-6 py-5">
+          <footer className="shrink-0 flex items-center  justify-end gap-3 border-t border-white/5 px-6 py-5">
             {footer}
           </footer>
         ) : null}
