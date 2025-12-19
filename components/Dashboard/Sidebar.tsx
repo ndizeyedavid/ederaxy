@@ -4,6 +4,8 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { me, type User } from "@/lib/api/auth";
+import { useEffect, useMemo, useState } from "react";
 import {
   BarChart3,
   Captions,
@@ -71,6 +73,57 @@ const secondaryLinks = [
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const [user, setUser] = useState<User | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await me();
+        if (!cancelled) setUser(res.user);
+      } catch {
+        if (!cancelled) setUser(null);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const displayName = useMemo(() => {
+    if (!user) return "";
+    const fromFullName = String(user.fullName ?? "").trim();
+    if (fromFullName) return fromFullName;
+    const first = String((user as any).firstName ?? "").trim();
+    const last = String((user as any).lastName ?? "").trim();
+    const joined = `${first} ${last}`.trim();
+    return joined;
+  }, [user]);
+
+  const avatarSrc = useMemo(() => {
+    const raw =
+      (user?.profilePicture as string | null | undefined) ??
+      ((user as any)?.avatarUrl as string | undefined) ??
+      ((user as any)?.profilePictureUrl as string | undefined);
+    const trimmed = String(raw ?? "").trim();
+
+    if (!trimmed) return "/users/2.jpeg";
+
+    if (/^https?:\/\//i.test(trimmed)) return trimmed;
+
+    if (trimmed.startsWith("/")) {
+      const apiBase =
+        process.env.NEXT_PUBLIC_API_BASE_URL?.trim() || "http://localhost:8080";
+      try {
+        return new URL(trimmed, apiBase).href;
+      } catch {
+        return trimmed;
+      }
+    }
+
+    return trimmed;
+  }, [user]);
 
   const renderLinks = (links: typeof primaryLinks) => (
     <nav className="px-3 ">
@@ -103,16 +156,17 @@ export default function Sidebar() {
         <div className="flex flex-col items-center gap-3 text-center">
           <div>
             <Image
-              src="/users/2.jpeg"
-              alt="Channel avatar"
+              src={avatarSrc}
+              alt={displayName ? `${displayName} avatar` : "Channel avatar"}
               width={96}
               height={96}
+              unoptimized
               className="h-24 w-24 rounded-full border border-white/10 object-cover shadow-lg"
             />
           </div>
           <div>
             <p className="text-sm  text-white/50">Your channel</p>
-            <p className="text-lg font-semibold">Kabutore Boniface</p>
+            <p className="text-lg font-semibold">{displayName || "-"}</p>
           </div>
         </div>
       </div>

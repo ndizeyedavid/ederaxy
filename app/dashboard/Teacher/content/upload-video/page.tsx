@@ -14,6 +14,17 @@ import {
 } from "@/components/TeacherContent/CreateEntityModals";
 import { EntityHeader } from "@/components/TeacherContent/EntityHeader";
 import { useTeacherContentStore } from "@/components/TeacherContent/TeacherContentProvider";
+import { ApiError } from "@/lib/api/client";
+import { listAcademicLevels } from "@/lib/api/academicLevels";
+import { listAcademicClasses } from "@/lib/api/academicClasses";
+import { listSubjectsByCurriculum } from "@/lib/api/subjects";
+import { listCourses } from "@/lib/api/courses";
+import { listLessons } from "@/lib/api/lessons";
+import {
+  getLessonVideo,
+  uploadLessonThumbnail,
+  uploadLessonVideo,
+} from "@/lib/api/video";
 import type {
   Course,
   Curriculum,
@@ -139,20 +150,234 @@ export default function UploadVideoWizardPage() {
   const [isCreateLessonOpen, setCreateLessonOpen] = useState(false);
 
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [isUploading, setUploading] = useState(false);
+  const [uploadStageLabel, setUploadStageLabel] = useState<string | null>(null);
+  const [lastCheckedAt, setLastCheckedAt] = useState<string | null>(null);
 
   const [progress, setProgress] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const phaseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (selectedCurriculumId) return;
+    if (!curriculums.length) return;
+    setSelectedCurriculumId(curriculums[0]!._id);
+  }, [curriculums, selectedCurriculumId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!selectedCurriculumId) {
+      setLevels([]);
+      setClasses([]);
+      setSubjects([]);
+      setCourses([]);
+      setLessons([]);
+      return;
+    }
+
+    (async () => {
+      try {
+        const [levelsRes, subjectsRes] = await Promise.all([
+          listAcademicLevels({ curriculumId: selectedCurriculumId }),
+          listSubjectsByCurriculum(selectedCurriculumId),
+        ]);
+        if (cancelled) return;
+        setLevels(levelsRes.levels);
+        setSubjects(subjectsRes.subjects);
+      } catch {
+        if (cancelled) return;
+        setLevels([]);
+        setSubjects([]);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    selectedCurriculumId,
+    setClasses,
+    setCourses,
+    setLessons,
+    setLevels,
+    setSubjects,
+  ]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!selectedLevelId) {
+      setClasses([]);
+      return;
+    }
+
+    (async () => {
+      try {
+        const res = await listAcademicClasses({ levelId: selectedLevelId });
+        if (cancelled) return;
+        setClasses(res.classes);
+      } catch {
+        if (cancelled) return;
+        setClasses([]);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedLevelId, setClasses]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!selectedSubjectId) {
+      setCourses([]);
+      setLessons([]);
+      return;
+    }
+
+    (async () => {
+      try {
+        const res = await listCourses({ subjectId: selectedSubjectId });
+        if (cancelled) return;
+        setCourses(res.courses);
+      } catch {
+        if (cancelled) return;
+        setCourses([]);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedSubjectId, setCourses, setLessons]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!selectedCourseId) {
+      setLessons([]);
+      return;
+    }
+
+    (async () => {
+      try {
+        const res = await listLessons({ courseId: selectedCourseId });
+        if (cancelled) return;
+        setLessons(res.lessons);
+      } catch {
+        if (cancelled) return;
+        setLessons([]);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedCourseId, setLessons]);
 
   const clearTimers = () => {
     if (timerRef.current) {
       clearInterval(timerRef.current);
       timerRef.current = null;
     }
-    if (phaseTimerRef.current) {
-      clearTimeout(phaseTimerRef.current);
-      phaseTimerRef.current = null;
+  };
+
+  const cancelUpload = () => {
+    clearTimers();
+    setUploading(false);
+    setUploadStageLabel(null);
+    setLastCheckedAt(null);
+    setStep("review");
+    setSubmitError("Upload cancelled. You can adjust files and try again.");
+  };
+
+  const activeVideo = useMemo(() => {
+    if (!selectedLessonId) return null;
+    const linkedLesson =
+      lessons.find((l) => l._id === selectedLessonId) ?? null;
+    if (linkedLesson?.video) {
+      return videos.find((v) => v._id === linkedLesson.video) ?? null;
     }
+    return videos.find((v) => v.lesson === selectedLessonId) ?? null;
+  }, [lessons, selectedLessonId, videos]);
+
+  const statusPill = (status: string) => {
+    const base =
+      "inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold";
+    if (status === "ready") return `${base} bg-emerald-400/20 text-emerald-200`;
+    if (status === "failed") return `${base} bg-rose-500/20 text-rose-200`;
+    if (status === "processing")
+      return `${base} bg-amber-500/20 text-amber-200`;
+    return `${base} bg-white/10 text-white/70`;
+  };
+
+  const upsertVideoInStore = (
+    videoFromApi: {
+      id: string;
+      lesson: string;
+      status: "uploaded" | "processing" | "ready" | "failed";
+      hlsMasterPlaylistPath: string | null;
+      variants: {
+        resolution: string;
+        bandwidth: number;
+        playlistPath: string;
+        publicPlaylistPath: string;
+      }[];
+      duration: number | null;
+      thumbnailUrl?: string;
+      failureReason?: string;
+      jobId?: string;
+      createdAt?: string;
+      updatedAt?: string;
+    },
+    fileContext?: { videoFile?: File | null; thumbnailFile?: File | null }
+  ) => {
+    const now = new Date().toISOString();
+
+    const payload: Video = {
+      _id: videoFromApi.id,
+      lesson: videoFromApi.lesson,
+      uploadedBy: "api-teacher",
+      originalFileName:
+        fileContext?.videoFile?.name ?? videoFromApi.id ?? "video",
+      mimeType: fileContext?.videoFile?.type || "video/mp4",
+      size: fileContext?.videoFile?.size ?? 0,
+      thumbnailUrl: videoFromApi.thumbnailUrl,
+      thumbnailOriginalFileName: fileContext?.thumbnailFile?.name,
+      storageKey: "",
+      originalPath: "",
+      hlsDirectory: "",
+      hlsMasterPlaylistPath: videoFromApi.hlsMasterPlaylistPath ?? null,
+      variants: (videoFromApi.variants ?? []).map((v) => ({
+        resolution: v.resolution,
+        bandwidth: v.bandwidth,
+        playlistPath: v.playlistPath,
+        publicPlaylistPath: v.publicPlaylistPath,
+      })),
+      duration: videoFromApi.duration ?? null,
+      status: videoFromApi.status,
+      failureReason: videoFromApi.failureReason,
+      jobId: videoFromApi.jobId,
+      createdAt: videoFromApi.createdAt ?? now,
+      updatedAt: videoFromApi.updatedAt ?? now,
+    };
+
+    setVideos((prev) => {
+      const withoutOld = prev.filter((v) => v._id !== payload._id);
+      return [payload, ...withoutOld];
+    });
+
+    setLessons((prev) =>
+      prev.map((l) =>
+        l._id === videoFromApi.lesson
+          ? {
+              ...l,
+              video: payload._id,
+              updatedAt: now,
+            }
+          : l
+      )
+    );
   };
 
   useEffect(() => {
@@ -373,7 +598,7 @@ export default function UploadVideoWizardPage() {
     if (step === "review") return setStep("video");
   };
 
-  const submit = () => {
+  const submit = async () => {
     setSubmitError(null);
 
     if (!selectedLessonId) {
@@ -389,116 +614,87 @@ export default function UploadVideoWizardPage() {
       return;
     }
 
+    setUploading(true);
     clearTimers();
 
-    const now = new Date().toISOString();
-    const newVideoId = generateObjectId();
+    try {
+      setStep("submitting");
+      setUploadStageLabel("Uploading video");
+      setProgress(15);
+      setLastCheckedAt(new Date().toISOString());
 
-    const persistedThumbnailUrl = thumbnailPreviewUrl ?? undefined;
+      const uploaded = await uploadLessonVideo(selectedLessonId, videoFile);
+      upsertVideoInStore(uploaded.video, { videoFile, thumbnailFile });
 
-    setVideos((prev) => {
-      const existingLesson =
-        lessons.find((l) => l._id === selectedLessonId) ?? null;
-      const withoutOld = existingLesson?.video
-        ? prev.filter((v) => v._id !== existingLesson.video)
-        : prev;
+      setUploadStageLabel("Uploading thumbnail");
+      setProgress(40);
+      setLastCheckedAt(new Date().toISOString());
 
-      const payload: Video = {
-        _id: newVideoId,
-        lesson: selectedLessonId,
-        uploadedBy: "local-teacher",
-        originalFileName: videoFile.name,
-        mimeType: videoFile.type || "video/mp4",
-        size: videoFile.size,
-        thumbnailUrl: persistedThumbnailUrl,
-        thumbnailOriginalFileName: thumbnailFile.name,
-        storageKey: `local/${newVideoId}/${videoFile.name}`,
-        originalPath: `/local/${newVideoId}/${videoFile.name}`,
-        hlsDirectory: `/local/${newVideoId}/hls`,
-        hlsMasterPlaylistPath: null,
-        variants: [],
-        duration: null,
-        status: "uploaded",
-        createdAt: now,
-        updatedAt: now,
-      };
+      const thumb = await uploadLessonThumbnail(
+        selectedLessonId,
+        thumbnailFile
+      );
+      upsertVideoInStore(thumb.video, { videoFile, thumbnailFile });
 
-      return [payload, ...withoutOld];
-    });
+      setUploadStageLabel("Processing");
+      setProgress(55);
+      setLastCheckedAt(new Date().toISOString());
 
-    setLessons((prev) =>
-      prev.map((l) =>
-        l._id === selectedLessonId
-          ? {
-              ...l,
-              video: newVideoId,
-              updatedAt: now,
+      timerRef.current = setInterval(async () => {
+        try {
+          const latest = await getLessonVideo(selectedLessonId);
+          upsertVideoInStore(latest.video, { videoFile, thumbnailFile });
+          setLastCheckedAt(new Date().toISOString());
+
+          setProgress((prev) => {
+            if (
+              latest.video.status === "processing" ||
+              latest.video.status === "uploaded"
+            ) {
+              return Math.min(prev + 3, 95);
             }
-          : l
-      )
-    );
+            return prev;
+          });
 
-    setStep("submitting");
-    setProgress(0);
-
-    timerRef.current = setInterval(() => {
-      setProgress((p) => {
-        const nextProgress = Math.min(p + 7, 100);
-        if (nextProgress >= 100) {
-          clearTimers();
-
-          const startedAt = new Date().toISOString();
-          setVideos((prev) =>
-            prev.map((v) =>
-              v._id === newVideoId
-                ? {
-                    ...v,
-                    status: "processing",
-                    processingStartedAt: startedAt,
-                    jobId: `job_${newVideoId.slice(-6)}`,
-                    updatedAt: startedAt,
-                  }
-                : v
-            )
-          );
-
-          phaseTimerRef.current = setTimeout(() => {
-            const finishedAt = new Date().toISOString();
-            setVideos((prev) =>
-              prev.map((v) =>
-                v._id === newVideoId
-                  ? {
-                      ...v,
-                      status: "ready",
-                      duration: 60,
-                      hlsMasterPlaylistPath: `/local/${newVideoId}/hls/master.m3u8`,
-                      variants: [
-                        {
-                          resolution: "720p",
-                          bandwidth: 2800000,
-                          playlistPath: `/local/${newVideoId}/hls/720p.m3u8`,
-                          publicPlaylistPath: `/local/${newVideoId}/hls/720p.m3u8`,
-                        },
-                        {
-                          resolution: "360p",
-                          bandwidth: 800000,
-                          playlistPath: `/local/${newVideoId}/hls/360p.m3u8`,
-                          publicPlaylistPath: `/local/${newVideoId}/hls/360p.m3u8`,
-                        },
-                      ],
-                      processingCompletedAt: finishedAt,
-                      updatedAt: finishedAt,
-                    }
-                  : v
-              )
-            );
-
+          if (latest.video.status === "ready") {
+            clearTimers();
+            setProgress(100);
             setStep("done");
-          }, 2200);
+            setUploading(false);
+            setUploadStageLabel("Ready");
+            setLastCheckedAt(new Date().toISOString());
+          }
+
+          if (latest.video.status === "failed") {
+            clearTimers();
+            setUploading(false);
+            setStep("review");
+            setUploadStageLabel(null);
+            setLastCheckedAt(null);
+            setSubmitError(latest.video.failureReason || "Processing failed.");
+          }
+        } catch (err) {
+          clearTimers();
+          setUploading(false);
+          setStep("review");
+          setUploadStageLabel(null);
+          setLastCheckedAt(null);
+          setSubmitError(
+            err instanceof Error ? err.message : "Polling failed."
+          );
         }
-        return nextProgress;
-      });
-    }, 180);
+      }, 7000);
+    } catch (err) {
+      setUploading(false);
+      setStep("review");
+      setUploadStageLabel(null);
+      setLastCheckedAt(null);
+      if (err instanceof ApiError) {
+        setSubmitError(err.message);
+        return;
+      }
+      setSubmitError(err instanceof Error ? err.message : "Upload failed.");
+    }
   };
 
   const steps = [
@@ -944,7 +1140,7 @@ export default function UploadVideoWizardPage() {
                   Upload video & thumbnail
                 </h2>
                 <p className="mt-1 text-sm text-white/50">
-                  Video upload is simulated for now.
+                  Choose the source video and an image thumbnail.
                 </p>
               </div>
 
@@ -958,6 +1154,7 @@ export default function UploadVideoWizardPage() {
                       type="file"
                       accept="video/*"
                       onChange={handleVideoChange}
+                      disabled={isUploading}
                       className="mt-3 w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white file:mr-4 file:rounded-full file:border-0 file:bg-white file:px-4 file:py-2 file:text-sm file:font-semibold file:text-black"
                     />
                     <p className="mt-2 text-xs text-white/40">
@@ -973,6 +1170,7 @@ export default function UploadVideoWizardPage() {
                       type="file"
                       accept="image/*"
                       onChange={handleThumbnailChange}
+                      disabled={isUploading}
                       className="mt-3 w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white file:mr-4 file:rounded-full file:border-0 file:bg-white file:px-4 file:py-2 file:text-sm file:font-semibold file:text-black"
                     />
                     <p className="mt-2 text-xs text-white/40">
@@ -1032,7 +1230,12 @@ export default function UploadVideoWizardPage() {
               </div>
 
               {submitError ? (
-                <p className="text-sm text-rose-200">{submitError}</p>
+                <div className="rounded-2xl border border-rose-500/25 bg-rose-500/10 p-4">
+                  <p className="text-sm font-semibold text-rose-100">
+                    Upload failed
+                  </p>
+                  <p className="mt-2 text-sm text-rose-100/70">{submitError}</p>
+                </div>
               ) : null}
             </div>
           ) : null}
@@ -1040,12 +1243,34 @@ export default function UploadVideoWizardPage() {
           {step === "submitting" ? (
             <div className="space-y-5">
               <div>
-                <h2 className="text-lg font-semibold text-white">
-                  Uploading (simulated)
-                </h2>
+                <h2 className="text-lg font-semibold text-white">Uploading</h2>
                 <p className="mt-1 text-sm text-white/50">
-                  Creating the video record and starting processing.
+                  {uploadStageLabel
+                    ? `${uploadStageLabel}...`
+                    : "Uploading and starting processing."}
                 </p>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-[#0f1117] px-5 py-4">
+                <div className="flex items-center gap-3">
+                  <span
+                    className={statusPill(activeVideo?.status ?? "uploaded")}
+                  >
+                    {(activeVideo?.status ?? "uploaded").toUpperCase()}
+                  </span>
+                  {activeVideo?.jobId ? (
+                    <span className="text-xs text-white/50">
+                      Job {activeVideo.jobId}
+                    </span>
+                  ) : null}
+                </div>
+                {lastCheckedAt ? (
+                  <span className="text-xs text-white/50">
+                    Last checked {new Date(lastCheckedAt).toLocaleTimeString()}
+                  </span>
+                ) : (
+                  <span className="text-xs text-white/50">Starting…</span>
+                )}
               </div>
 
               <div className="rounded-2xl border border-white/10 bg-[#0f1117] p-5">
@@ -1058,6 +1283,18 @@ export default function UploadVideoWizardPage() {
                     className="h-full rounded-full bg-emerald-400 transition-all"
                     style={{ width: `${progress}%` }}
                   />
+                </div>
+                <div className="mt-4 flex items-center justify-between">
+                  <p className="text-xs text-white/50">
+                    We will keep checking until the video is ready.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={cancelUpload}
+                    className="rounded-full border border-white/20 px-4 py-2 text-xs font-semibold text-white transition hover:border-white/40"
+                  >
+                    Cancel
+                  </button>
                 </div>
               </div>
             </div>
@@ -1074,7 +1311,7 @@ export default function UploadVideoWizardPage() {
 
               <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-5">
                 <p className="text-sm font-semibold text-emerald-100">
-                  Video ready (simulated)
+                  Video ready
                 </p>
                 <p className="mt-2 text-sm text-emerald-100/70">
                   You can now view it in the course lessons page or in the
@@ -1119,9 +1356,10 @@ export default function UploadVideoWizardPage() {
               <button
                 type="button"
                 onClick={submit}
+                disabled={isUploading}
                 className="rounded-full bg-emerald-400 px-6 py-2 text-sm font-semibold text-emerald-950 transition hover:bg-emerald-300"
               >
-                Submit
+                {isUploading ? "Uploading..." : "Upload"}
               </button>
             ) : step === "submitting" || step === "done" ? (
               <div />
@@ -1130,6 +1368,7 @@ export default function UploadVideoWizardPage() {
                 type="button"
                 onClick={next}
                 disabled={
+                  isUploading ||
                   (step === "curriculum" && !canGoNextFromCurriculum) ||
                   (step === "level" && !canGoNextFromLevel) ||
                   (step === "class" && !canGoNextFromClass) ||

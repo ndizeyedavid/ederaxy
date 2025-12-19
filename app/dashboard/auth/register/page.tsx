@@ -15,6 +15,7 @@ import {
   register as registerUser,
   uploadProfilePicture,
 } from "@/lib/api/auth";
+import { getCurriculums, type CurriculumListItem } from "@/lib/api/curriculums";
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
@@ -60,6 +61,9 @@ export default function RegisterPage() {
   );
   const [stepIndex, setStepIndex] = useState(0);
   const [serverError, setServerError] = useState<string | null>(null);
+  const [curriculums, setCurriculums] = useState<CurriculumListItem[]>([]);
+  const [curriculumsLoading, setCurriculumsLoading] = useState(false);
+  const [curriculumsError, setCurriculumsError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -76,6 +80,31 @@ export default function RegisterPage() {
       cancelled = true;
     };
   }, [router]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      setCurriculumsLoading(true);
+      setCurriculumsError(null);
+      try {
+        const res = await getCurriculums();
+        if (cancelled) return;
+        setCurriculums(res.curriculums);
+      } catch (err) {
+        if (cancelled) return;
+        setCurriculumsError(
+          err instanceof Error ? err.message : "Failed to load curriculums"
+        );
+      } finally {
+        if (!cancelled) setCurriculumsLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const {
     register,
@@ -171,16 +200,6 @@ export default function RegisterPage() {
     return true;
   }, [currentStep, errors, form]);
 
-  const curriculumOptions = useMemo(
-    () => [
-      { id: "", label: "Select" },
-      { id: "rwanda", label: "Rwanda" },
-      { id: "cambridge", label: "Cambridge" },
-      { id: "ib", label: "IB" },
-    ],
-    []
-  );
-
   const onContinue = async () => {
     const fields = fieldsByStep[currentStep] ?? [];
     const ok = await trigger(fields as any, { shouldFocus: true });
@@ -258,7 +277,7 @@ export default function RegisterPage() {
         schoolType: values.schoolType || undefined,
         country: values.country?.trim() || undefined,
         city: values.city?.trim() || undefined,
-        preferredCurriculumId: values.preferredCurriculum || undefined,
+        preferredCurriculumId: values.preferredCurriculum?.trim() || undefined,
         agreeToTerms: values.agreeToTerms,
         termsVersion: "v1",
       };
@@ -714,12 +733,23 @@ export default function RegisterPage() {
                         {...register("preferredCurriculum")}
                         className="mt-2 w-full rounded-xl border border-white/10 bg-[#0f1117] px-4 py-3 text-sm text-white placeholder:text-white/40 focus:border-emerald-400/70 focus:outline-none"
                       >
-                        {curriculumOptions.map((opt) => (
-                          <option key={opt.id} value={opt.id}>
-                            {opt.label}
+                        <option value="">Select</option>
+                        {curriculums.map((c) => (
+                          <option key={c._id} value={c._id}>
+                            {c.name}
                           </option>
                         ))}
                       </select>
+                      {curriculumsLoading ? (
+                        <p className="mt-2 text-xs text-white/50">
+                          Loading curriculums...
+                        </p>
+                      ) : null}
+                      {curriculumsError ? (
+                        <p className="mt-2 text-xs text-rose-200">
+                          {curriculumsError}
+                        </p>
+                      ) : null}
                     </Field>
                     <Field>
                       <FieldLabel htmlFor="country">Country</FieldLabel>

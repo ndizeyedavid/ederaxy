@@ -3,6 +3,14 @@
 import { useMemo, useState, type FormEvent } from "react";
 
 import { ModalShell } from "@/components/TeacherContent/ModalShell";
+import { ApiError } from "@/lib/api/client";
+import { createCurriculum } from "@/lib/api/curriculums";
+import { createAcademicLevel } from "@/lib/api/academicLevels";
+import { createAcademicClass } from "@/lib/api/academicClasses";
+import { createClassCombination } from "@/lib/api/classCombinations";
+import { createSubject } from "@/lib/api/subjects";
+import { createCourse } from "@/lib/api/courses";
+import { createLesson } from "@/lib/api/lessons";
 import type {
   AcademicClass,
   AcademicLevel,
@@ -38,26 +46,30 @@ export function CreateCurriculumModal({
   const [title, setTitle] = useState("");
   const [country, setCountry] = useState("");
   const [description, setDescription] = useState("");
+  const [isSubmitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
-  const handleSubmit = (event: FormEvent) => {
+  const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
 
-    const now = new Date().toISOString();
-    const payload: Curriculum = {
-      _id: generateObjectId(),
-      title: title.trim(),
-      description: description.trim() || undefined,
-      country: country.trim() || undefined,
-      createdBy: "local-teacher",
-      createdAt: now,
-      updatedAt: now,
-    };
-
-    onCreate(payload);
-    setTitle("");
-    setCountry("");
-    setDescription("");
-    onClose();
+    setSubmitError(null);
+    setSubmitting(true);
+    try {
+      const res = await createCurriculum({
+        name: title.trim(),
+        description: description.trim() || undefined,
+        country: country.trim() || undefined,
+      });
+      onCreate(res.curriculum);
+      setTitle("");
+      setCountry("");
+      setDescription("");
+      onClose();
+    } catch (err) {
+      setSubmitError(err instanceof ApiError ? err.message : "Create failed.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -71,6 +83,7 @@ export function CreateCurriculumModal({
           <button
             type="button"
             onClick={onClose}
+            disabled={isSubmitting}
             className="rounded-full border border-white/20 px-5 py-2 text-sm font-semibold text-white transition hover:border-white/40"
           >
             Cancel
@@ -78,13 +91,17 @@ export function CreateCurriculumModal({
           <button
             type="submit"
             form="create-curriculum-form"
+            disabled={isSubmitting}
             className="rounded-full bg-emerald-400 px-6 py-2 text-sm font-semibold text-emerald-950 transition hover:bg-emerald-300"
           >
-            Create
+            {isSubmitting ? "Creating..." : "Create"}
           </button>
         </>
       }
     >
+      {submitError ? (
+        <p className="text-sm font-semibold text-rose-200">{submitError}</p>
+      ) : null}
       <form
         id="create-curriculum-form"
         className="space-y-4"
@@ -148,29 +165,36 @@ export function CreateLevelModal({
   const [curriculumId, setCurriculumId] = useState(
     defaultCurriculumId ?? fallbackCurriculumId
   );
+  const [stage, setStage] = useState("");
   const [order, setOrder] = useState<number>(1);
+  const [isSubmitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
-  const handleSubmit = (event: FormEvent) => {
+  const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
 
-    const now = new Date().toISOString();
-    const payload: AcademicLevel = {
-      _id: generateObjectId(),
-      title: title.trim(),
-      description: description.trim() || undefined,
-      curriculum: curriculumId,
-      order,
-      createdBy: "local-teacher",
-      createdAt: now,
-      updatedAt: now,
-    };
-
-    onCreate(payload);
-    setTitle("");
-    setDescription("");
-    setCurriculumId(defaultCurriculumId ?? fallbackCurriculumId);
-    setOrder(1);
-    onClose();
+    setSubmitError(null);
+    setSubmitting(true);
+    try {
+      const res = await createAcademicLevel({
+        name: title.trim(),
+        description: description.trim() || undefined,
+        stage: stage.trim(),
+        curriculumId,
+        order,
+      });
+      onCreate(res.level);
+      setTitle("");
+      setDescription("");
+      setStage("");
+      setCurriculumId(defaultCurriculumId ?? fallbackCurriculumId);
+      setOrder(1);
+      onClose();
+    } catch (err) {
+      setSubmitError(err instanceof ApiError ? err.message : "Create failed.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -184,6 +208,7 @@ export function CreateLevelModal({
           <button
             type="button"
             onClick={onClose}
+            disabled={isSubmitting}
             className="rounded-full border border-white/20 px-5 py-2 text-sm font-semibold text-white transition hover:border-white/40"
           >
             Cancel
@@ -191,13 +216,17 @@ export function CreateLevelModal({
           <button
             type="submit"
             form="create-level-form"
+            disabled={isSubmitting}
             className="rounded-full bg-emerald-400 px-6 py-2 text-sm font-semibold text-emerald-950 transition hover:bg-emerald-300"
           >
-            Create
+            {isSubmitting ? "Creating..." : "Create"}
           </button>
         </>
       }
     >
+      {submitError ? (
+        <p className="text-sm font-semibold text-rose-200">{submitError}</p>
+      ) : null}
       <form
         id="create-level-form"
         className="space-y-4"
@@ -250,6 +279,19 @@ export function CreateLevelModal({
 
         <div>
           <label className="text-xs font-semibold uppercase tracking-[0.26em] text-white/50">
+            Stage
+          </label>
+          <input
+            value={stage}
+            onChange={(e) => setStage(e.currentTarget.value)}
+            required
+            className="mt-2 w-full rounded-xl border border-white/10 bg-[#0f1117] px-4 py-3 text-sm text-white placeholder:text-white/40 focus:border-emerald-400/70 focus:outline-none"
+            placeholder="e.g. olevel"
+          />
+        </div>
+
+        <div>
+          <label className="text-xs font-semibold uppercase tracking-[0.26em] text-white/50">
             Description (optional)
           </label>
           <textarea
@@ -283,6 +325,7 @@ export function CreateClassModal({
   const fallbackCurriculumId = curriculums[0]?._id ?? "";
 
   const [title, setTitle] = useState("");
+  const [code, setCode] = useState("");
   const [description, setDescription] = useState("");
   const [curriculumId, setCurriculumId] = useState(
     defaultCurriculumId ?? fallbackCurriculumId
@@ -299,27 +342,34 @@ export function CreateClassModal({
     fallbackLevelId
   );
 
-  const handleSubmit = (event: FormEvent) => {
+  const [isSubmitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
+  const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
 
-    const now = new Date().toISOString();
-    const payload: AcademicClass = {
-      _id: generateObjectId(),
-      title: title.trim(),
-      description: description.trim() || undefined,
-      curriculum: curriculumId,
-      academicLevel: levelId,
-      createdBy: "local-teacher",
-      createdAt: now,
-      updatedAt: now,
-    };
+    setSubmitError(null);
+    setSubmitting(true);
+    try {
+      const res = await createAcademicClass({
+        name: title.trim(),
+        code: code.trim(),
+        description: description.trim() || undefined,
+        levelId: String(levelId),
+      });
 
-    onCreate(payload);
-    setTitle("");
-    setDescription("");
-    setCurriculumId(defaultCurriculumId ?? fallbackCurriculumId);
-    setLevelId(fallbackLevelId);
-    onClose();
+      onCreate(res.academicClass);
+      setTitle("");
+      setCode("");
+      setDescription("");
+      setCurriculumId(defaultCurriculumId ?? fallbackCurriculumId);
+      setLevelId(fallbackLevelId);
+      onClose();
+    } catch (err) {
+      setSubmitError(err instanceof ApiError ? err.message : "Create failed.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -333,6 +383,7 @@ export function CreateClassModal({
           <button
             type="button"
             onClick={onClose}
+            disabled={isSubmitting}
             className="rounded-full border border-white/20 px-5 py-2 text-sm font-semibold text-white transition hover:border-white/40"
           >
             Cancel
@@ -340,13 +391,17 @@ export function CreateClassModal({
           <button
             type="submit"
             form="create-class-form"
+            disabled={isSubmitting}
             className="rounded-full bg-emerald-400 px-6 py-2 text-sm font-semibold text-emerald-950 transition hover:bg-emerald-300"
           >
-            Create
+            {isSubmitting ? "Creating..." : "Create"}
           </button>
         </>
       }
     >
+      {submitError ? (
+        <p className="text-sm font-semibold text-rose-200">{submitError}</p>
+      ) : null}
       <form
         id="create-class-form"
         className="space-y-4"
@@ -411,6 +466,19 @@ export function CreateClassModal({
 
         <div>
           <label className="text-xs font-semibold uppercase tracking-[0.26em] text-white/50">
+            Code
+          </label>
+          <input
+            value={code}
+            onChange={(e) => setCode(e.currentTarget.value)}
+            required
+            className="mt-2 w-full rounded-xl border border-white/10 bg-[#0f1117] px-4 py-3 text-sm text-white placeholder:text-white/40 focus:border-emerald-400/70 focus:outline-none"
+            placeholder="e.g. S1"
+          />
+        </div>
+
+        <div>
+          <label className="text-xs font-semibold uppercase tracking-[0.26em] text-white/50">
             Description (optional)
           </label>
           <textarea
@@ -436,8 +504,12 @@ export function CreateCombinationModal({
   onCreate: (combination: ClassCombination) => void;
 }) {
   const [title, setTitle] = useState("");
+  const [code, setCode] = useState("");
+  const [type, setType] = useState("");
   const [description, setDescription] = useState("");
   const [subjectIds, setSubjectIds] = useState<ObjectIdString[]>([]);
+  const [isSubmitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const toggleSubject = (id: ObjectIdString) => {
     setSubjectIds((prev) =>
@@ -445,25 +517,32 @@ export function CreateCombinationModal({
     );
   };
 
-  const handleSubmit = (event: FormEvent) => {
+  const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
 
-    const now = new Date().toISOString();
-    const payload: ClassCombination = {
-      _id: generateObjectId(),
-      title: title.trim(),
-      description: description.trim() || undefined,
-      subjects: subjectIds,
-      createdBy: "local-teacher",
-      createdAt: now,
-      updatedAt: now,
-    };
+    setSubmitError(null);
+    setSubmitting(true);
+    try {
+      const res = await createClassCombination({
+        name: title.trim(),
+        code: code.trim(),
+        type: type.trim() || undefined,
+        description: description.trim() || undefined,
+        subjects: subjectIds,
+      });
 
-    onCreate(payload);
-    setTitle("");
-    setDescription("");
-    setSubjectIds([]);
-    onClose();
+      onCreate(res.combination);
+      setTitle("");
+      setCode("");
+      setType("");
+      setDescription("");
+      setSubjectIds([]);
+      onClose();
+    } catch (err) {
+      setSubmitError(err instanceof ApiError ? err.message : "Create failed.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -477,6 +556,7 @@ export function CreateCombinationModal({
           <button
             type="button"
             onClick={onClose}
+            disabled={isSubmitting}
             className="rounded-full border border-white/20 px-5 py-2 text-sm font-semibold text-white transition hover:border-white/40"
           >
             Cancel
@@ -484,13 +564,17 @@ export function CreateCombinationModal({
           <button
             type="submit"
             form="create-combination-form"
+            disabled={isSubmitting}
             className="rounded-full bg-emerald-400 px-6 py-2 text-sm font-semibold text-emerald-950 transition hover:bg-emerald-300"
           >
-            Create
+            {isSubmitting ? "Creating..." : "Create"}
           </button>
         </>
       }
     >
+      {submitError ? (
+        <p className="text-sm font-semibold text-rose-200">{submitError}</p>
+      ) : null}
       <form
         id="create-combination-form"
         className="space-y-4"
@@ -507,6 +591,32 @@ export function CreateCombinationModal({
             className="mt-2 w-full rounded-xl border border-white/10 bg-[#0f1117] px-4 py-3 text-sm text-white placeholder:text-white/40 focus:border-emerald-400/70 focus:outline-none"
             placeholder="e.g. S1 STEM"
           />
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <div>
+            <label className="text-xs font-semibold uppercase tracking-[0.26em] text-white/50">
+              Code
+            </label>
+            <input
+              value={code}
+              onChange={(e) => setCode(e.currentTarget.value)}
+              required
+              className="mt-2 w-full rounded-xl border border-white/10 bg-[#0f1117] px-4 py-3 text-sm text-white placeholder:text-white/40 focus:border-emerald-400/70 focus:outline-none"
+              placeholder="e.g. MPC"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-semibold uppercase tracking-[0.26em] text-white/50">
+              Type
+            </label>
+            <input
+              value={type}
+              onChange={(e) => setType(e.currentTarget.value)}
+              className="mt-2 w-full rounded-xl border border-white/10 bg-[#0f1117] px-4 py-3 text-sm text-white placeholder:text-white/40 focus:border-emerald-400/70 focus:outline-none"
+              placeholder="User-defined"
+            />
+          </div>
         </div>
 
         <div>
@@ -614,33 +724,37 @@ export function CreateSubjectModal({
     );
   };
 
-  const handleSubmit = (event: FormEvent) => {
+  const [isSubmitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
+  const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
 
-    const now = new Date().toISOString();
-    const payload: Subject = {
-      _id: generateObjectId(),
-      title: title.trim(),
-      description: description.trim() || undefined,
-      curriculum: curriculumId,
-      targetLevels: targetLevelIds.length ? targetLevelIds : undefined,
-      targetClasses: targetClassIds.length ? targetClassIds : undefined,
-      targetCombinations: targetCombinationIds.length
-        ? targetCombinationIds
-        : undefined,
-      createdBy: "local-teacher",
-      createdAt: now,
-      updatedAt: now,
-    };
+    setSubmitError(null);
+    setSubmitting(true);
+    try {
+      const res = await createSubject({
+        title: title.trim(),
+        description: description.trim() || undefined,
+        curriculumId,
+        targetLevelIds,
+        targetClassIds,
+        targetCombinationIds,
+      });
 
-    onCreate(payload);
-    setTitle("");
-    setDescription("");
-    setCurriculumId(defaultCurriculumId ?? fallbackCurriculumId);
-    setTargetLevelIds([]);
-    setTargetClassIds([]);
-    setTargetCombinationIds([]);
-    onClose();
+      onCreate(res.subject);
+      setTitle("");
+      setDescription("");
+      setCurriculumId(defaultCurriculumId ?? fallbackCurriculumId);
+      setTargetLevelIds([]);
+      setTargetClassIds([]);
+      setTargetCombinationIds([]);
+      onClose();
+    } catch (err) {
+      setSubmitError(err instanceof ApiError ? err.message : "Create failed.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -654,6 +768,7 @@ export function CreateSubjectModal({
           <button
             type="button"
             onClick={onClose}
+            disabled={isSubmitting}
             className="rounded-full border border-white/20 px-5 py-2 text-sm font-semibold text-white transition hover:border-white/40"
           >
             Cancel
@@ -661,13 +776,17 @@ export function CreateSubjectModal({
           <button
             type="submit"
             form="create-subject-form"
+            disabled={isSubmitting}
             className="rounded-full bg-emerald-400 px-6 py-2 text-sm font-semibold text-emerald-950 transition hover:bg-emerald-300"
           >
-            Create
+            {isSubmitting ? "Creating..." : "Create"}
           </button>
         </>
       }
     >
+      {submitError ? (
+        <p className="text-sm font-semibold text-rose-200">{submitError}</p>
+      ) : null}
       <form
         id="create-subject-form"
         className="space-y-4"
@@ -832,28 +951,33 @@ export function CreateCourseModal({
     defaultSubjectId ?? fallbackSubjectId
   );
   const [isPublished, setIsPublished] = useState(false);
+  const [isSubmitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
-  const handleSubmit = (event: FormEvent) => {
+  const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
 
-    const now = new Date().toISOString();
-    const payload: Course = {
-      _id: generateObjectId(),
-      title: title.trim(),
-      description: description.trim() || undefined,
-      subject: subjectId,
-      teacher: "local-teacher",
-      isPublished,
-      createdAt: now,
-      updatedAt: now,
-    };
+    setSubmitError(null);
+    setSubmitting(true);
+    try {
+      const res = await createCourse({
+        title: title.trim(),
+        description: description.trim() || undefined,
+        subjectId,
+        isPublished,
+      });
 
-    onCreate(payload);
-    setTitle("");
-    setDescription("");
-    setSubjectId(defaultSubjectId ?? fallbackSubjectId);
-    setIsPublished(false);
-    onClose();
+      onCreate(res.course);
+      setTitle("");
+      setDescription("");
+      setSubjectId(defaultSubjectId ?? fallbackSubjectId);
+      setIsPublished(false);
+      onClose();
+    } catch (err) {
+      setSubmitError(err instanceof ApiError ? err.message : "Create failed.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -867,6 +991,7 @@ export function CreateCourseModal({
           <button
             type="button"
             onClick={onClose}
+            disabled={isSubmitting}
             className="rounded-full border border-white/20 px-5 py-2 text-sm font-semibold text-white transition hover:border-white/40"
           >
             Cancel
@@ -874,13 +999,17 @@ export function CreateCourseModal({
           <button
             type="submit"
             form="create-course-form"
+            disabled={isSubmitting}
             className="rounded-full bg-emerald-400 px-6 py-2 text-sm font-semibold text-emerald-950 transition hover:bg-emerald-300"
           >
-            Create
+            {isSubmitting ? "Creating..." : "Create"}
           </button>
         </>
       }
     >
+      {submitError ? (
+        <p className="text-sm font-semibold text-rose-200">{submitError}</p>
+      ) : null}
       <form
         id="create-course-form"
         className="space-y-4"
@@ -966,6 +1095,8 @@ export function CreateLessonModal({
   const [description, setDescription] = useState("");
   const [order, setOrder] = useState<number>(nextOrder);
   const [resources, setResources] = useState<LessonResource[]>([]);
+  const [isSubmitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const addResource = () => {
     setResources((prev) => [...prev, { label: "", url: "" }]);
@@ -981,32 +1112,34 @@ export function CreateLessonModal({
     setResources((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const handleSubmit = (event: FormEvent) => {
+  const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
-
-    const now = new Date().toISOString();
     const cleanedResources = resources
       .map((r) => ({ label: r.label.trim(), url: r.url.trim() }))
       .filter((r) => r.label && r.url);
 
-    const payload: Lesson = {
-      _id: generateObjectId(),
-      title: title.trim(),
-      description: description.trim() || undefined,
-      order,
-      course: courseId,
-      resources: cleanedResources.length ? cleanedResources : undefined,
-      video: null,
-      createdAt: now,
-      updatedAt: now,
-    };
+    setSubmitError(null);
+    setSubmitting(true);
+    try {
+      const res = await createLesson({
+        title: title.trim(),
+        description: description.trim() || undefined,
+        order,
+        courseId,
+        resources: cleanedResources.length ? cleanedResources : undefined,
+      });
 
-    onCreate(payload);
-    setTitle("");
-    setDescription("");
-    setOrder(nextOrder);
-    setResources([]);
-    onClose();
+      onCreate(res.lesson);
+      setTitle("");
+      setDescription("");
+      setOrder(nextOrder);
+      setResources([]);
+      onClose();
+    } catch (err) {
+      setSubmitError(err instanceof ApiError ? err.message : "Create failed.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -1020,6 +1153,7 @@ export function CreateLessonModal({
           <button
             type="button"
             onClick={onClose}
+            disabled={isSubmitting}
             className="rounded-full border border-white/20 px-5 py-2 text-sm font-semibold text-white transition hover:border-white/40"
           >
             Cancel
@@ -1027,13 +1161,17 @@ export function CreateLessonModal({
           <button
             type="submit"
             form="create-lesson-form"
+            disabled={isSubmitting}
             className="rounded-full bg-emerald-400 px-6 py-2 text-sm font-semibold text-emerald-950 transition hover:bg-emerald-300"
           >
-            Create
+            {isSubmitting ? "Creating..." : "Create"}
           </button>
         </>
       }
     >
+      {submitError ? (
+        <p className="text-sm font-semibold text-rose-200">{submitError}</p>
+      ) : null}
       <form
         id="create-lesson-form"
         className="space-y-4"
