@@ -8,12 +8,19 @@ import {
   FieldLabel,
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { ApiError } from "@/lib/api/client";
+import {
+  login,
+  register as registerUser,
+  uploadProfilePicture,
+} from "@/lib/api/auth";
 import Image from "next/image";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import PhoneInput from "react-phone-number-input";
 import "react-phone-number-input/style.css";
+import { useRouter } from "next/navigation";
 
 type TeacherRegisterFormValues = {
   email: string;
@@ -38,11 +45,20 @@ type TeacherRegisterFormValues = {
 };
 
 export default function RegisterPage() {
+  const router = useRouter();
   const steps = useMemo(
-    () => ["Account", "Teacher", "School", "Preferences", "Review"],
+    () => [
+      "Account",
+      "Teacher",
+      "Profile picture",
+      "School",
+      "Preferences",
+      "Review",
+    ],
     []
   );
   const [stepIndex, setStepIndex] = useState(0);
+  const [serverError, setServerError] = useState<string | null>(null);
 
   const {
     register,
@@ -53,6 +69,7 @@ export default function RegisterPage() {
     getValues,
     control,
     setValue,
+    setError,
   } = useForm<TeacherRegisterFormValues>({
     mode: "onChange",
     defaultValues: {
@@ -88,12 +105,25 @@ export default function RegisterPage() {
     const mapping: Record<string, (keyof TeacherRegisterFormValues)[]> = {
       Account: ["email", "password", "confirmPassword"],
       Teacher: ["fullName", "phone"],
+      "Profile picture": [],
       School: ["schoolName"],
       Preferences: ["agreeToTerms"],
       Review: [],
     };
     return mapping;
   }, []);
+
+  const profilePreviewUrl = useMemo(() => {
+    const file = form.profilePicture?.[0];
+    if (!file) return null;
+    return URL.createObjectURL(file);
+  }, [form.profilePicture]);
+
+  useEffect(() => {
+    return () => {
+      if (profilePreviewUrl) URL.revokeObjectURL(profilePreviewUrl);
+    };
+  }, [profilePreviewUrl]);
 
   const canProceed = useMemo(() => {
     if (currentStep === "Account") {
@@ -144,7 +174,130 @@ export default function RegisterPage() {
   const onBack = () => setStepIndex((prev) => Math.max(prev - 1, 0));
 
   const onValidSubmit = (values: TeacherRegisterFormValues) => {
-    console.log("Register teacher (UI-only)", values);
+    return;
+  };
+
+  const onFinalSubmit = async (values: TeacherRegisterFormValues) => {
+    setServerError(null);
+    try {
+      if (!values.fullName.trim()) {
+        setError("fullName", {
+          type: "manual",
+          message: "Full name is required",
+        });
+        return;
+      }
+
+      if (!values.email.trim()) {
+        setError("email", { type: "manual", message: "Email is required" });
+        return;
+      }
+
+      if (!values.password.trim() || values.password.length < 8) {
+        setError("password", {
+          type: "manual",
+          message: "Password must be at least 8 characters",
+        });
+        return;
+      }
+
+      if (values.password !== values.confirmPassword) {
+        setError("confirmPassword", {
+          type: "manual",
+          message: "Passwords do not match",
+        });
+        return;
+      }
+
+      if (!values.nationalId.trim()) {
+        setError("nationalId", {
+          type: "manual",
+          message: "National ID is required for teacher registration",
+        });
+        return;
+      }
+
+      const yearsExperience = values.yearsExperience?.trim()
+        ? Number(values.yearsExperience)
+        : undefined;
+
+      const registerPayload = {
+        fullName: values.fullName.trim(),
+        email: values.email.trim(),
+        password: values.password,
+        role: "teacher" as const,
+        dob: values.dob || undefined,
+        nationalId: values.nationalId.trim() || undefined,
+        bio: values.bio?.trim() || undefined,
+        phone: values.phone || undefined,
+        teacherTitle: values.teacherTitle?.trim() || undefined,
+        yearsExperience:
+          typeof yearsExperience === "number" && !Number.isNaN(yearsExperience)
+            ? yearsExperience
+            : undefined,
+        highestQualification: values.highestQualification?.trim() || undefined,
+        subjects: values.subjects?.length ? values.subjects : undefined,
+        schoolName: values.schoolName?.trim() || undefined,
+        schoolType: values.schoolType || undefined,
+        country: values.country?.trim() || undefined,
+        city: values.city?.trim() || undefined,
+        preferredCurriculumId: values.preferredCurriculum || undefined,
+        agreeToTerms: values.agreeToTerms,
+        termsVersion: "v1",
+      };
+
+      await registerUser(registerPayload);
+
+      await login({ email: values.email.trim(), password: values.password });
+
+      const profileFile = values.profilePicture?.[0] ?? null;
+      if (profileFile) {
+        await uploadProfilePicture(profileFile);
+      }
+
+      router.push("/dashboard/Teacher");
+    } catch (err) {
+      if (err instanceof ApiError) {
+        if (err.details?.length) {
+          for (const issue of err.details) {
+            const field = issue.field as
+              | keyof TeacherRegisterFormValues
+              | undefined;
+            if (field && field in (errors as any) === false) {
+              // fallthrough
+            }
+            if (field === "fullName")
+              setError("fullName", {
+                type: "server",
+                message: issue.message || err.message,
+              });
+            if (field === "email")
+              setError("email", {
+                type: "server",
+                message: issue.message || err.message,
+              });
+            if (field === "password")
+              setError("password", {
+                type: "server",
+                message: issue.message || err.message,
+              });
+            if (field === "nationalId")
+              setError("nationalId", {
+                type: "server",
+                message: issue.message || err.message,
+              });
+          }
+          if (!serverError) setServerError(err.message);
+        } else {
+          setServerError(err.message);
+        }
+        return;
+      }
+
+      setServerError(
+        err instanceof Error ? err.message : "Registration failed"
+      );
+    }
   };
 
   const [subjectDraft, setSubjectDraft] = useState("");
@@ -196,7 +349,7 @@ export default function RegisterPage() {
           <div className="w-full max-w-2xl">
             <form
               className={"flex flex-col gap-6"}
-              onSubmit={handleSubmit(onValidSubmit)}
+              onSubmit={handleSubmit(onFinalSubmit)}
             >
               <FieldGroup>
                 <div className="flex flex-col gap-2">
@@ -208,6 +361,12 @@ export default function RegisterPage() {
                       Step {stepIndex + 1} of {steps.length}: {currentStep}
                     </p>
                   </div>
+
+                  {serverError ? (
+                    <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+                      {serverError}
+                    </div>
+                  ) : null}
 
                   <div className="mt-2 flex flex-wrap items-center justify-center gap-2">
                     {steps.map((label, index) => {
@@ -259,8 +418,8 @@ export default function RegisterPage() {
                         {...register("password", {
                           required: "Password is required",
                           minLength: {
-                            value: 6,
-                            message: "Password must be at least 6 characters",
+                            value: 8,
+                            message: "Password must be at least 8 characters",
                           },
                         })}
                         required
@@ -292,6 +451,44 @@ export default function RegisterPage() {
                         </p>
                       ) : null}
                     </Field>
+                  </div>
+                ) : null}
+
+                {currentStep === "Profile picture" ? (
+                  <div className="grid gap-4">
+                    <Field>
+                      <FieldLabel htmlFor="profilePicture">
+                        Profile picture
+                      </FieldLabel>
+                      <Input
+                        id="profilePicture"
+                        type="file"
+                        accept="image/*"
+                        {...register("profilePicture")}
+                      />
+                    </Field>
+
+                    {profilePreviewUrl ? (
+                      <div className="rounded-2xl border border-white/10 bg-[#0f1117] p-4">
+                        <p className="text-xs font-semibold uppercase tracking-[0.26em] text-white/50">
+                          Preview
+                        </p>
+                        <div className="mt-3 overflow-hidden rounded-xl border border-white/10">
+                          <img
+                            src={profilePreviewUrl}
+                            alt="Profile preview"
+                            className="h-64 w-full object-cover"
+                          />
+                        </div>
+                        <p className="mt-2 text-xs text-white/50">
+                          {form.profilePicture?.[0]?.name ?? ""}
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="rounded-2xl border border-white/10 bg-[#0f1117] p-4 text-sm text-white/60">
+                        Upload an image to preview it here.
+                      </div>
+                    )}
                   </div>
                 ) : null}
 
@@ -336,18 +533,6 @@ export default function RegisterPage() {
                         placeholder="Tell students a bit about you (optional)"
                         {...register("bio")}
                         className="mt-2 w-full rounded-xl border border-white/10 bg-[#0f1117] px-4 py-3 text-sm text-white placeholder:text-white/40 focus:border-emerald-400/70 focus:outline-none"
-                      />
-                    </Field>
-
-                    <Field className="sm:col-span-2">
-                      <FieldLabel htmlFor="profilePicture">
-                        Profile picture
-                      </FieldLabel>
-                      <Input
-                        id="profilePicture"
-                        type="file"
-                        accept="image/*"
-                        {...register("profilePicture")}
                       />
                     </Field>
 

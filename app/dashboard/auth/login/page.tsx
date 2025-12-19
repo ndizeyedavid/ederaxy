@@ -1,4 +1,5 @@
-import { GalleryVerticalEnd } from "lucide-react";
+"use client";
+
 import { Button } from "@/components/ui/button";
 import {
   Field,
@@ -8,10 +9,69 @@ import {
   FieldSeparator,
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { ApiError } from "@/lib/api/client";
+import { login, me } from "@/lib/api/auth";
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
+import { useForm } from "react-hook-form";
+
+type LoginFormValues = {
+  email: string;
+  password: string;
+};
 
 export default function LoginPage() {
+  const router = useRouter();
+  const [serverError, setServerError] = useState<string | null>(null);
+
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+    setError,
+  } = useForm<LoginFormValues>({
+    mode: "onChange",
+    defaultValues: {
+      email: "",
+      password: "",
+    },
+  });
+
+  const onSubmit = async (values: LoginFormValues) => {
+    setServerError(null);
+    try {
+      await login(values);
+      await me();
+      router.push("/dashboard/Teacher");
+    } catch (err) {
+      if (err instanceof ApiError) {
+        if (err.details?.length) {
+          for (const issue of err.details) {
+            if (issue.field === "email") {
+              setError("email", {
+                type: "server",
+                message: issue.message || err.message,
+              });
+            }
+            if (issue.field === "password") {
+              setError("password", {
+                type: "server",
+                message: issue.message || err.message,
+              });
+            }
+          }
+        } else {
+          setServerError(err.message);
+        }
+        return;
+      }
+
+      setServerError(err instanceof Error ? err.message : "Login failed");
+    }
+  };
+
   return (
     <div className="grid min-h-svh lg:grid-cols-2">
       <div className="flex flex-col gap-4 p-6 md:p-10">
@@ -29,7 +89,10 @@ export default function LoginPage() {
 
         <div className="flex flex-1 items-center justify-center">
           <div className="w-full max-w-xs">
-            <form className={"flex flex-col gap-6"}>
+            <form
+              className={"flex flex-col gap-6"}
+              onSubmit={handleSubmit(onSubmit)}
+            >
               <FieldGroup>
                 <div className="flex flex-col items-center gap-1 text-center">
                   <h1 className="text-2xl font-bold">Login to your account</h1>
@@ -37,14 +100,27 @@ export default function LoginPage() {
                     Enter your email below to login to your account
                   </p>
                 </div>
+                {serverError ? (
+                  <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+                    {serverError}
+                  </div>
+                ) : null}
                 <Field>
                   <FieldLabel htmlFor="email">Email</FieldLabel>
                   <Input
                     id="email"
                     type="email"
                     placeholder="m@example.com"
+                    {...register("email", {
+                      required: "Email is required",
+                    })}
                     required
                   />
+                  {errors.email?.message ? (
+                    <p className="text-destructive mt-2 text-xs">
+                      {String(errors.email.message)}
+                    </p>
+                  ) : null}
                 </Field>
                 <Field>
                   <div className="flex items-center">
@@ -56,10 +132,24 @@ export default function LoginPage() {
                       Forgot your password?
                     </Link>
                   </div>
-                  <Input id="password" type="password" required />
+                  <Input
+                    id="password"
+                    type="password"
+                    {...register("password", {
+                      required: "Password is required",
+                    })}
+                    required
+                  />
+                  {errors.password?.message ? (
+                    <p className="text-destructive mt-2 text-xs">
+                      {String(errors.password.message)}
+                    </p>
+                  ) : null}
                 </Field>
                 <Field>
-                  <Button type="submit">Login</Button>
+                  <Button type="submit" disabled={isSubmitting}>
+                    {isSubmitting ? "Logging in..." : "Login"}
+                  </Button>
                 </Field>
                 <FieldSeparator>Or continue with</FieldSeparator>
                 <Field>
