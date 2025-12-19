@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 
 import Header from "@/components/Dashboard/Header";
 import Sidebar from "@/components/Dashboard/Sidebar";
+import { TeacherContentProvider } from "@/components/TeacherContent/TeacherContentProvider";
 
 interface TeacherDashboardLayoutProps {
   children: ReactNode;
@@ -18,7 +19,9 @@ export default function TeacherDashboardLayout({
           <Sidebar />
         </div>
         <main className="flex-1 overflow-y-auto bg-[#141517] px-12  py-6">
-          <div className="mx-auto w-full max-w-7xl space-y-6">{children}</div>
+          <TeacherContentProvider>
+            <div className="mx-auto w-full max-w-7xl space-y-6">{children}</div>
+          </TeacherContentProvider>
         </main>
       </div>
     </div>

@@ -1,122 +1,131 @@
 "use client";
 
-import Image from "next/image";
-import { useMemo } from "react";
+import Link from "next/link";
+import { useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 
 import { AgGridReact } from "ag-grid-react";
 import type { ColDef, ICellRendererParams } from "ag-grid-community";
 import { AllCommunityModule, ModuleRegistry } from "ag-grid-community";
-import { Filter, Globe2, Upload, Users } from "lucide-react";
+import { BookOpen, Layers, Plus } from "lucide-react";
 
 import "ag-grid-community/styles/ag-grid.css";
 import "ag-grid-community/styles/ag-theme-quartz.css";
-import Link from "next/link";
 import ContentNavigation from "@/components/Dashboard/ContentNavigation";
+import { CreateCourseModal } from "@/components/TeacherContent/CreateEntityModals";
+import { EntityHeader } from "@/components/TeacherContent/EntityHeader";
+import { PublishedBadge } from "@/components/TeacherContent/PublishedBadge";
+import { useTeacherContentStore } from "@/components/TeacherContent/TeacherContentProvider";
+import type { Course } from "@/lib/mock/teacherData";
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
-interface VideoRow {
+interface CourseRow {
   id: string;
   title: string;
   description: string;
-  thumbnail: string;
-  duration: string;
-  visibility: string;
-  target: string;
-  date: string;
-  status: string;
-  lessons: number;
-  Plays: string;
+  curriculumTitle: string;
+  subjectTitle: string;
+  isPublished: boolean;
+  lessonsCount: number;
+  updatedAt: string;
 }
 
-const videoRows: VideoRow[] = [
-  {
-    id: "vid-1",
-    title: "Making a 2D game in GODOT",
-    description:
-      "Build a platformer level from scratch, covering tilemaps, player movement, enemies, and polish techniques for a smooth final experience.",
-    thumbnail: "/videos/ai-vs-ml-thumb.jpg",
-    duration: "0:50",
-    visibility: "Public",
-    target: "O'Level",
-    date: "Aug 15, 2025",
-    status: "Published",
-    lessons: 4,
-    Plays: "-",
-  },
-  {
-    id: "vid-2",
-    title: "Algebra mastery recap",
-    description:
-      "A quick walkthrough of common algebra misconceptions with animations and practice prompts to send to your cohort.",
-    thumbnail: "/videos/ai-vs-ml-thumb.jpg",
-    duration: "12:03",
-    visibility: "Private",
-    target: "Primary",
-    date: "Aug 10, 2025",
-    status: "Published",
-    lessons: 12,
-    Plays: "18",
-  },
-  {
-    id: "vid-3",
-    title: "STEM lab prep walkthrough",
-    description:
-      "Set expectations for tomorrow’s solar energy lab and show students how to prep their science notebooks.",
-    thumbnail: "/videos/ai-vs-ml-thumb.jpg",
-    duration: "07:48",
-    visibility: "Unlisted",
-    target: "Primary",
-    date: "Aug 4, 2025",
-    status: "Processing",
-    lessons: 28,
-    Plays: "32",
-  },
-];
-
-function VideoCell({ data }: ICellRendererParams<VideoRow>) {
+function CourseCell({ data }: ICellRendererParams<CourseRow>) {
   const row = data!;
   return (
-    <div className="flex items-center gap-4">
-      <div className="relative h-16 w-full">
-        <div className="absolute inset-0  scale-[0.97] rounded  bg-[#424651] blur-[0.2px]" />
-        <div className="absolute inset-0 translate-y-[2px] scale-[0.985] rounded bg-[#767d93]" />
-        <Image
-          src={row.thumbnail}
-          alt={row.title}
-          fill
-          className="object-cover rounded pt-1"
-        />
-      </div>
-      <div className="space-y-1">
-        <p className="text-sm font-semibold text-white">{row.title}</p>
-        <p className="line-clamp-2 text-xs text-white/50">{row.description}</p>
+    <div className="space-y-1">
+      <Link
+        href={`/dashboard/Teacher/content/courses/${row.id}`}
+        className="text-sm font-semibold text-white hover:text-white/80"
+      >
+        {row.title}
+      </Link>
+      <p className="line-clamp-2 text-xs text-white/50">{row.description}</p>
+      <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-white/50">
+        <span className="inline-flex items-center gap-1.5">
+          <Layers className="size-3.5" />
+          {row.curriculumTitle}
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <BookOpen className="size-3.5" />
+          {row.subjectTitle}
+        </span>
       </div>
     </div>
   );
 }
 
-function targetCell({ data }: ICellRendererParams<VideoRow>) {
-  const row = data!;
-  return <span className="text-sm text-white/80">{row.target}</span>;
-}
+function UpdatedCell({ value }: ICellRendererParams<CourseRow, string>) {
+  const date = new Date(value);
+  const text = Number.isNaN(date.getTime())
+    ? value
+    : date.toLocaleDateString(undefined, {
+        year: "numeric",
+        month: "short",
+        day: "2-digit",
+      });
 
-function DateCell({ data }: ICellRendererParams<VideoRow>) {
-  const row = data!;
   return (
     <div className="space-y-1 text-sm text-white">
-      <p>{row.date}</p>
-      <p className="text-xs text-white/50">{row.status}</p>
+      <p>{text}</p>
+      <p className="text-xs text-white/50">Updated</p>
     </div>
   );
 }
 
-function MetricCell({ value }: ICellRendererParams<VideoRow, number | string>) {
+function MetricCell({ value }: ICellRendererParams<CourseRow, number>) {
   return <span className="text-sm font-semibold text-white">{value}</span>;
 }
 
+function PublishedCell({ data }: ICellRendererParams<CourseRow>) {
+  const row = data!;
+  return <PublishedBadge isPublished={row.isPublished} />;
+}
+
 export default function ContentCoursesPage() {
-  const columnDefs = useMemo<ColDef<VideoRow>[]>(
+  const searchParams = useSearchParams();
+  const subjectId = searchParams.get("subjectId");
+
+  const { courses, setCourses, subjects, curriculums, lessons } =
+    useTeacherContentStore();
+  const [isCreateOpen, setCreateOpen] = useState(false);
+
+  const visibleCourses = useMemo(() => {
+    if (!subjectId) return courses;
+    return courses.filter((course) => course.subject === subjectId);
+  }, [courses, subjectId]);
+
+  const rows = useMemo<CourseRow[]>(() => {
+    const toRow = (course: Course): CourseRow => {
+      const subject = subjects.find((s) => s._id === course.subject) ?? null;
+      const curriculum = subject
+        ? curriculums.find((c) => c._id === subject.curriculum) ?? null
+        : null;
+
+      return {
+        id: course._id,
+        title: course.title,
+        description: course.description ?? "No description provided.",
+        curriculumTitle: curriculum?.title ?? "Curriculum",
+        subjectTitle: subject?.title ?? "Subject",
+        isPublished: course.isPublished,
+        lessonsCount: lessons.filter((lesson) => lesson.course === course._id)
+          .length,
+        updatedAt: course.updatedAt,
+      };
+    };
+
+    return visibleCourses.map(toRow);
+  }, [visibleCourses]);
+
+  const selectedSubjectTitle = useMemo(() => {
+    if (!subjectId) return null;
+    const subject = subjects.find((s) => s._id === subjectId) ?? null;
+    return subject?.title ?? null;
+  }, [subjectId, subjects]);
+
+  const columnDefs = useMemo<ColDef<CourseRow>[]>(
     () => [
       {
         headerName: "",
@@ -134,31 +143,25 @@ export default function ContentCoursesPage() {
       {
         headerName: "Course",
         field: "title",
-        cellRenderer: VideoCell,
+        cellRenderer: CourseCell,
         flex: 2,
         minWidth: 360,
       },
       {
-        headerName: "Target Audience",
-        field: "target",
-        cellRenderer: targetCell,
-        minWidth: 190,
+        headerName: "Status",
+        field: "isPublished",
+        cellRenderer: PublishedCell,
+        minWidth: 140,
       },
       {
-        headerName: "Date",
-        field: "date",
-        cellRenderer: DateCell,
+        headerName: "Updated",
+        field: "updatedAt",
+        cellRenderer: UpdatedCell,
         minWidth: 150,
       },
       {
         headerName: "Lessons",
-        field: "lessons",
-        cellRenderer: MetricCell,
-        minWidth: 100,
-      },
-      {
-        headerName: "Plays",
-        field: "Plays",
+        field: "lessonsCount",
         cellRenderer: MetricCell,
         minWidth: 100,
       },
@@ -166,7 +169,7 @@ export default function ContentCoursesPage() {
     []
   );
 
-  const defaultColDef = useMemo<ColDef<VideoRow>>(
+  const defaultColDef = useMemo<ColDef<CourseRow>>(
     () => ({
       sortable: true,
       resizable: true,
@@ -181,16 +184,31 @@ export default function ContentCoursesPage() {
 
   return (
     <section className="space-y-6">
-      <header className="flex items-center justify-between text-white">
-        <h1 className="text-xl font-bold ">Channel Content</h1>
-      </header>
+      <EntityHeader
+        title="Courses"
+        subtitle={
+          selectedSubjectTitle
+            ? `Courses under ${selectedSubjectTitle}.`
+            : "Create courses under subjects, then structure lessons and videos."
+        }
+        actions={
+          <button
+            type="button"
+            onClick={() => setCreateOpen(true)}
+            className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-semibold text-black transition hover:bg-white/90"
+          >
+            <Plus className="size-4" />
+            Create course
+          </button>
+        }
+      />
 
       <ContentNavigation activeTab="Courses" />
 
       <section>
         <div className="ag-theme-quartz content-ag-grid h-[520px] rounded border border-white/5">
-          <AgGridReact<VideoRow>
-            rowData={videoRows}
+          <AgGridReact<CourseRow>
+            rowData={rows}
             columnDefs={columnDefs}
             defaultColDef={defaultColDef}
             rowHeight={104}
@@ -256,6 +274,14 @@ export default function ContentCoursesPage() {
           color: #ffffff;
         }
       `}</style>
+
+      <CreateCourseModal
+        open={isCreateOpen}
+        onClose={() => setCreateOpen(false)}
+        subjects={subjects}
+        defaultSubjectId={subjectId}
+        onCreate={(newCourse) => setCourses((prev) => [newCourse, ...prev])}
+      />
     </section>
   );
 }

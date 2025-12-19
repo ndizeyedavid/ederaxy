@@ -1,124 +1,140 @@
 "use client";
 
-import Image from "next/image";
+import Link from "next/link";
 import { useMemo } from "react";
 
 import { AgGridReact } from "ag-grid-react";
 import type { ColDef, ICellRendererParams } from "ag-grid-community";
 import { AllCommunityModule, ModuleRegistry } from "ag-grid-community";
-import { Filter, Globe2, Upload, Users } from "lucide-react";
+import { Layers } from "lucide-react";
 
 import "ag-grid-community/styles/ag-grid.css";
 import "ag-grid-community/styles/ag-theme-quartz.css";
-import Link from "next/link";
 import ContentNavigation from "@/components/Dashboard/ContentNavigation";
+import { EntityHeader } from "@/components/TeacherContent/EntityHeader";
+import { VideoStatusBadge } from "@/components/TeacherContent/VideoStatusBadge";
+import {
+  getLessonsForCourse,
+  getSubjectById,
+  getVideoForLesson,
+  mockCourses,
+  type Course,
+  type Lesson,
+  type Video,
+  type VideoStatus,
+} from "@/lib/mock/teacherData";
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
-interface VideoRow {
+interface LessonVideoRow {
   id: string;
-  title: string;
-  description: string;
-  thumbnail: string;
-  duration: string;
-  visibility: string;
-  target: string;
-  date: string;
-  status: string;
-  views: number;
-  comments: number;
-  likes: string;
+  lessonId: string;
+  lessonTitle: string;
+  courseId: string;
+  courseTitle: string;
+  subjectTitle: string;
+  status: VideoStatus | "none";
+  durationSeconds: number | null;
+  updatedAt: string;
+  failureReason?: string;
 }
 
-const videoRows: VideoRow[] = [
-  {
-    id: "vid-1",
-    title: "Making a 2D game in GODOT",
-    description:
-      "Build a platformer level from scratch, covering tilemaps, player movement, enemies, and polish techniques for a smooth final experience.",
-    thumbnail: "/videos/ai-vs-ml-thumb.jpg",
-    duration: "0:50",
-    visibility: "Public",
-    target: "O'Level",
-    date: "Aug 15, 2025",
-    status: "Published",
-    views: 4,
-    comments: 0,
-    likes: "-",
-  },
-  {
-    id: "vid-2",
-    title: "Algebra mastery recap",
-    description:
-      "A quick walkthrough of common algebra misconceptions with animations and practice prompts to send to your cohort.",
-    thumbnail: "/videos/ai-vs-ml-thumb.jpg",
-    duration: "12:03",
-    visibility: "Private",
-    target: "Primary",
-    date: "Aug 10, 2025",
-    status: "Published",
-    views: 12,
-    comments: 3,
-    likes: "18",
-  },
-  {
-    id: "vid-3",
-    title: "STEM lab prep walkthrough",
-    description:
-      "Set expectations for tomorrow’s solar energy lab and show students how to prep their science notebooks.",
-    thumbnail: "/videos/ai-vs-ml-thumb.jpg",
-    duration: "07:48",
-    visibility: "Unlisted",
-    target: "Primary",
-    date: "Aug 4, 2025",
-    status: "Processing",
-    views: 28,
-    comments: 5,
-    likes: "32",
-  },
-];
-
-function VideoCell({ data }: ICellRendererParams<VideoRow>) {
+function LessonVideoCell({ data }: ICellRendererParams<LessonVideoRow>) {
   const row = data!;
+
   return (
-    <div className="flex items-center gap-4">
-      <div className="relative h-16 w-full overflow-hidden rounded-lg border border-white/10">
-        <Image
-          src={row.thumbnail}
-          alt={row.title}
-          fill
-          className="object-cover"
-        />
-      </div>
-      <div className="space-y-1">
-        <p className="text-sm font-semibold text-white">{row.title}</p>
-        <p className="line-clamp-2 text-xs text-white/50">{row.description}</p>
+    <div className="space-y-1">
+      <Link
+        href={`/dashboard/Teacher/content/courses/${row.courseId}`}
+        className="text-sm font-semibold text-white hover:text-white/80"
+      >
+        {row.lessonTitle}
+      </Link>
+      <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-white/50">
+        <span className="inline-flex items-center gap-1.5">
+          <Layers className="size-3.5" />
+          {row.courseTitle} · {row.subjectTitle}
+        </span>
       </div>
     </div>
   );
 }
 
-function targetCell({ data }: ICellRendererParams<VideoRow>) {
+function StatusCell({ data }: ICellRendererParams<LessonVideoRow>) {
   const row = data!;
-  return <span className="text-sm text-white/80">{row.target}</span>;
+  return (
+    <VideoStatusBadge status={row.status} failureReason={row.failureReason} />
+  );
 }
 
-function DateCell({ data }: ICellRendererParams<VideoRow>) {
-  const row = data!;
+function DurationCell({
+  value,
+}: ICellRendererParams<LessonVideoRow, number | null>) {
+  if (!value) return <span className="text-sm text-white/60">-</span>;
+  const minutes = Math.floor(value / 60);
+  const seconds = Math.floor(value % 60);
+  const text = `${minutes}:${String(seconds).padStart(2, "0")}`;
+  return <span className="text-sm font-semibold text-white">{text}</span>;
+}
+
+function UpdatedCell({ value }: ICellRendererParams<LessonVideoRow, string>) {
+  if (!value) {
+    return <span className="text-sm text-white/60">-</span>;
+  }
+
+  const date = new Date(value);
+  const text = Number.isNaN(date.getTime())
+    ? value
+    : date.toLocaleDateString(undefined, {
+        year: "numeric",
+        month: "short",
+        day: "2-digit",
+      });
   return (
     <div className="space-y-1 text-sm text-white">
-      <p>{row.date}</p>
-      <p className="text-xs text-white/50">{row.status}</p>
+      <p>{text}</p>
+      <p className="text-xs text-white/50">Updated</p>
     </div>
   );
-}
-
-function MetricCell({ value }: ICellRendererParams<VideoRow, number | string>) {
-  return <span className="text-sm font-semibold text-white">{value}</span>;
 }
 
 export default function ContentVideosPage() {
-  const columnDefs = useMemo<ColDef<VideoRow>[]>(
+  const rows = useMemo<LessonVideoRow[]>(() => {
+    const resolveCourseContext = (course: Course) => {
+      const subject = getSubjectById(course.subject);
+      const subjectTitle = subject?.title ?? "Subject";
+      return { subjectTitle };
+    };
+
+    const allRows: LessonVideoRow[] = [];
+
+    mockCourses.forEach((course) => {
+      const { subjectTitle } = resolveCourseContext(course);
+      const lessons = getLessonsForCourse(course._id);
+
+      lessons.forEach((lesson: Lesson) => {
+        const video: Video | null = lesson.video
+          ? getVideoForLesson(lesson._id)
+          : null;
+        allRows.push({
+          id: lesson._id,
+          lessonId: lesson._id,
+          lessonTitle: lesson.title,
+          courseId: course._id,
+          courseTitle: course.title,
+          subjectTitle,
+          status: video?.status ?? "none",
+          durationSeconds: video?.duration ?? null,
+          updatedAt: (video?.updatedAt ?? lesson.updatedAt) as string,
+          failureReason: video?.failureReason,
+        });
+      });
+    });
+
+    return allRows.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  }, []);
+
+  const columnDefs = useMemo<ColDef<LessonVideoRow>[]>(
     () => [
       {
         headerName: "",
@@ -134,47 +150,35 @@ export default function ContentVideosPage() {
         pinned: "left",
       },
       {
-        headerName: "Video",
-        field: "title",
-        cellRenderer: VideoCell,
+        headerName: "Lesson",
+        field: "lessonTitle",
+        cellRenderer: LessonVideoCell,
         flex: 2,
         minWidth: 360,
       },
       {
-        headerName: "Target Audience",
-        field: "target",
-        cellRenderer: targetCell,
-        minWidth: 190,
-      },
-      {
-        headerName: "Date",
-        field: "date",
-        cellRenderer: DateCell,
+        headerName: "Status",
+        field: "status",
+        cellRenderer: StatusCell,
         minWidth: 150,
       },
       {
-        headerName: "Views",
-        field: "views",
-        cellRenderer: MetricCell,
-        minWidth: 100,
+        headerName: "Duration",
+        field: "durationSeconds",
+        cellRenderer: DurationCell,
+        minWidth: 110,
       },
       {
-        headerName: "Comments",
-        field: "comments",
-        cellRenderer: MetricCell,
-        minWidth: 120,
-      },
-      {
-        headerName: "Likes",
-        field: "likes",
-        cellRenderer: MetricCell,
-        minWidth: 100,
+        headerName: "Updated",
+        field: "updatedAt",
+        cellRenderer: UpdatedCell,
+        minWidth: 150,
       },
     ],
     []
   );
 
-  const defaultColDef = useMemo<ColDef<VideoRow>>(
+  const defaultColDef = useMemo<ColDef<LessonVideoRow>>(
     () => ({
       sortable: true,
       resizable: true,
@@ -189,16 +193,17 @@ export default function ContentVideosPage() {
 
   return (
     <section className="space-y-6">
-      <header className="flex items-center justify-between text-white">
-        <h1 className="text-xl font-bold ">Channel Content</h1>
-      </header>
+      <EntityHeader
+        title="Lesson videos"
+        subtitle="All lesson videos across your courses. Track processing status and jump back to the course lessons view."
+      />
 
       <ContentNavigation activeTab="Videos" />
 
       <section>
         <div className="ag-theme-quartz content-ag-grid h-[520px] rounded border border-white/5">
-          <AgGridReact<VideoRow>
-            rowData={videoRows}
+          <AgGridReact<LessonVideoRow>
+            rowData={rows}
             columnDefs={columnDefs}
             defaultColDef={defaultColDef}
             rowHeight={104}

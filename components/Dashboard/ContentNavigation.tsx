@@ -1,18 +1,27 @@
 import Link from "next/link";
 
 interface IContentNavigation {
-  activeTab: "Videos" | "Clips" | "Study Material" | "Courses";
+  activeTab:
+    | "Curriculums"
+    | "Subjects"
+    | "Courses"
+    | "Lessons"
+    | "Videos"
+    | "Clips"
+    | "Study Material";
 }
 
 export default function ContentNavigation({ activeTab }: IContentNavigation) {
   const contentTabs = [
+    { label: "Curriculums", href: "/dashboard/Teacher/content/curriculums" },
+    { label: "Subjects", href: "/dashboard/Teacher/content/subjects" },
+    { label: "Courses", href: "/dashboard/Teacher/content/courses" },
     { label: "Videos", href: "/dashboard/Teacher/content" },
     { label: "Clips", href: "/dashboard/Teacher/content/clips" },
     {
       label: "Study Material",
       href: "/dashboard/Teacher/content/study-material",
     },
-    { label: "Courses", href: "/dashboard/Teacher/content/courses" },
   ];
 
   return (
