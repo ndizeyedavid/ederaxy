@@ -14,7 +14,7 @@ import { login, me } from "@/lib/api/auth";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 
 type LoginFormValues = {
@@ -25,6 +25,21 @@ type LoginFormValues = {
 export default function LoginPage() {
   const router = useRouter();
   const [serverError, setServerError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        await me();
+        if (!cancelled) router.replace("/dashboard/Teacher");
+      } catch {
+        // not logged in
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [router]);
 
   const {
     register,

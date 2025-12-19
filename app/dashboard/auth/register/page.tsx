@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { ApiError } from "@/lib/api/client";
 import {
   login,
+  me,
   register as registerUser,
   uploadProfilePicture,
 } from "@/lib/api/auth";
@@ -59,6 +60,22 @@ export default function RegisterPage() {
   );
   const [stepIndex, setStepIndex] = useState(0);
   const [serverError, setServerError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        await me();
+        if (!cancelled) router.replace("/dashboard/Teacher");
+      } catch {
+        // not logged in
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [router]);
 
   const {
     register,
