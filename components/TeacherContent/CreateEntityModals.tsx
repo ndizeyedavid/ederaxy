@@ -4,7 +4,9 @@ import { useMemo, useState, type FormEvent } from "react";
 
 import { ModalShell } from "@/components/TeacherContent/ModalShell";
 import type {
+  AcademicClass,
   AcademicLevel,
+  ClassCombination,
   Course,
   Curriculum,
   Lesson,
@@ -128,16 +130,445 @@ export function CreateCurriculumModal({
   );
 }
 
-export function CreateSubjectModal({
+export function CreateLevelModal({
+  open,
+  onClose,
+  curriculums,
+  onCreate,
+  defaultCurriculumId,
+}: BaseModalProps & {
+  curriculums: Curriculum[];
+  onCreate: (level: AcademicLevel) => void;
+  defaultCurriculumId?: ObjectIdString | null;
+}) {
+  const fallbackCurriculumId = curriculums[0]?._id ?? "";
+
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [curriculumId, setCurriculumId] = useState(
+    defaultCurriculumId ?? fallbackCurriculumId
+  );
+  const [order, setOrder] = useState<number>(1);
+
+  const handleSubmit = (event: FormEvent) => {
+    event.preventDefault();
+
+    const now = new Date().toISOString();
+    const payload: AcademicLevel = {
+      _id: generateObjectId(),
+      title: title.trim(),
+      description: description.trim() || undefined,
+      curriculum: curriculumId,
+      order,
+      createdBy: "local-teacher",
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    onCreate(payload);
+    setTitle("");
+    setDescription("");
+    setCurriculumId(defaultCurriculumId ?? fallbackCurriculumId);
+    setOrder(1);
+    onClose();
+  };
+
+  return (
+    <ModalShell
+      open={open}
+      title="Create level"
+      subtitle="Levels belong to curriculums and contain classes."
+      onClose={onClose}
+      footer={
+        <>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-full border border-white/20 px-5 py-2 text-sm font-semibold text-white transition hover:border-white/40"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            form="create-level-form"
+            className="rounded-full bg-emerald-400 px-6 py-2 text-sm font-semibold text-emerald-950 transition hover:bg-emerald-300"
+          >
+            Create
+          </button>
+        </>
+      }
+    >
+      <form
+        id="create-level-form"
+        className="space-y-4"
+        onSubmit={handleSubmit}
+      >
+        <div>
+          <label className="text-xs font-semibold uppercase tracking-[0.26em] text-white/50">
+            Curriculum
+          </label>
+          <select
+            value={curriculumId}
+            onChange={(e) => setCurriculumId(e.currentTarget.value)}
+            className="mt-2 w-full rounded-xl border border-white/10 bg-[#0f1117] px-4 py-3 text-sm text-white focus:border-emerald-400/70 focus:outline-none"
+          >
+            {curriculums.map((c) => (
+              <option key={c._id} value={c._id}>
+                {c.title}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-3">
+          <div className="md:col-span-2">
+            <label className="text-xs font-semibold uppercase tracking-[0.26em] text-white/50">
+              Title
+            </label>
+            <input
+              value={title}
+              onChange={(e) => setTitle(e.currentTarget.value)}
+              required
+              className="mt-2 w-full rounded-xl border border-white/10 bg-[#0f1117] px-4 py-3 text-sm text-white placeholder:text-white/40 focus:border-emerald-400/70 focus:outline-none"
+              placeholder="e.g. O'Level"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-semibold uppercase tracking-[0.26em] text-white/50">
+              Order
+            </label>
+            <input
+              type="number"
+              min={1}
+              value={order}
+              onChange={(e) => setOrder(Number(e.currentTarget.value))}
+              required
+              className="mt-2 w-full rounded-xl border border-white/10 bg-[#0f1117] px-4 py-3 text-sm text-white focus:border-emerald-400/70 focus:outline-none"
+            />
+          </div>
+        </div>
+
+        <div>
+          <label className="text-xs font-semibold uppercase tracking-[0.26em] text-white/50">
+            Description (optional)
+          </label>
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.currentTarget.value)}
+            rows={3}
+            className="mt-2 w-full rounded-xl border border-white/10 bg-[#0f1117] px-4 py-3 text-sm text-white placeholder:text-white/40 focus:border-emerald-400/70 focus:outline-none"
+            placeholder="Short level description"
+          />
+        </div>
+      </form>
+    </ModalShell>
+  );
+}
+
+export function CreateClassModal({
   open,
   onClose,
   curriculums,
   levels,
   onCreate,
   defaultCurriculumId,
+  defaultLevelId,
 }: BaseModalProps & {
   curriculums: Curriculum[];
   levels: AcademicLevel[];
+  onCreate: (academicClass: AcademicClass) => void;
+  defaultCurriculumId?: ObjectIdString | null;
+  defaultLevelId?: ObjectIdString | null;
+}) {
+  const fallbackCurriculumId = curriculums[0]?._id ?? "";
+
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [curriculumId, setCurriculumId] = useState(
+    defaultCurriculumId ?? fallbackCurriculumId
+  );
+
+  const availableLevels = useMemo(
+    () => levels.filter((l) => l.curriculum === curriculumId),
+    [curriculumId, levels]
+  );
+
+  const fallbackLevelId =
+    defaultLevelId ?? availableLevels[0]?._id ?? levels[0]?._id ?? "";
+  const [levelId, setLevelId] = useState<ObjectIdString | string>(
+    fallbackLevelId
+  );
+
+  const handleSubmit = (event: FormEvent) => {
+    event.preventDefault();
+
+    const now = new Date().toISOString();
+    const payload: AcademicClass = {
+      _id: generateObjectId(),
+      title: title.trim(),
+      description: description.trim() || undefined,
+      curriculum: curriculumId,
+      academicLevel: levelId,
+      createdBy: "local-teacher",
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    onCreate(payload);
+    setTitle("");
+    setDescription("");
+    setCurriculumId(defaultCurriculumId ?? fallbackCurriculumId);
+    setLevelId(fallbackLevelId);
+    onClose();
+  };
+
+  return (
+    <ModalShell
+      open={open}
+      title="Create class"
+      subtitle="Classes belong to a level within a curriculum."
+      onClose={onClose}
+      footer={
+        <>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-full border border-white/20 px-5 py-2 text-sm font-semibold text-white transition hover:border-white/40"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            form="create-class-form"
+            className="rounded-full bg-emerald-400 px-6 py-2 text-sm font-semibold text-emerald-950 transition hover:bg-emerald-300"
+          >
+            Create
+          </button>
+        </>
+      }
+    >
+      <form
+        id="create-class-form"
+        className="space-y-4"
+        onSubmit={handleSubmit}
+      >
+        <div>
+          <label className="text-xs font-semibold uppercase tracking-[0.26em] text-white/50">
+            Curriculum
+          </label>
+          <select
+            value={curriculumId}
+            onChange={(e) => {
+              const nextId = e.currentTarget.value;
+              setCurriculumId(nextId);
+              const nextLevels = levels.filter((l) => l.curriculum === nextId);
+              setLevelId(nextLevels[0]?._id ?? "");
+            }}
+            className="mt-2 w-full rounded-xl border border-white/10 bg-[#0f1117] px-4 py-3 text-sm text-white focus:border-emerald-400/70 focus:outline-none"
+          >
+            {curriculums.map((c) => (
+              <option key={c._id} value={c._id}>
+                {c.title}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="text-xs font-semibold uppercase tracking-[0.26em] text-white/50">
+            Level
+          </label>
+          <select
+            value={levelId}
+            onChange={(e) => setLevelId(e.currentTarget.value)}
+            className="mt-2 w-full rounded-xl border border-white/10 bg-[#0f1117] px-4 py-3 text-sm text-white focus:border-emerald-400/70 focus:outline-none"
+          >
+            {availableLevels.map((l) => (
+              <option key={l._id} value={l._id}>
+                {l.title}
+              </option>
+            ))}
+          </select>
+          {!availableLevels.length ? (
+            <p className="mt-2 text-sm text-white/50">
+              No levels found for this curriculum.
+            </p>
+          ) : null}
+        </div>
+
+        <div>
+          <label className="text-xs font-semibold uppercase tracking-[0.26em] text-white/50">
+            Title
+          </label>
+          <input
+            value={title}
+            onChange={(e) => setTitle(e.currentTarget.value)}
+            required
+            className="mt-2 w-full rounded-xl border border-white/10 bg-[#0f1117] px-4 py-3 text-sm text-white placeholder:text-white/40 focus:border-emerald-400/70 focus:outline-none"
+            placeholder="e.g. S1"
+          />
+        </div>
+
+        <div>
+          <label className="text-xs font-semibold uppercase tracking-[0.26em] text-white/50">
+            Description (optional)
+          </label>
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.currentTarget.value)}
+            rows={3}
+            className="mt-2 w-full rounded-xl border border-white/10 bg-[#0f1117] px-4 py-3 text-sm text-white placeholder:text-white/40 focus:border-emerald-400/70 focus:outline-none"
+            placeholder="Short class description"
+          />
+        </div>
+      </form>
+    </ModalShell>
+  );
+}
+
+export function CreateCombinationModal({
+  open,
+  onClose,
+  subjects,
+  onCreate,
+}: BaseModalProps & {
+  subjects: Subject[];
+  onCreate: (combination: ClassCombination) => void;
+}) {
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [subjectIds, setSubjectIds] = useState<ObjectIdString[]>([]);
+
+  const toggleSubject = (id: ObjectIdString) => {
+    setSubjectIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  };
+
+  const handleSubmit = (event: FormEvent) => {
+    event.preventDefault();
+
+    const now = new Date().toISOString();
+    const payload: ClassCombination = {
+      _id: generateObjectId(),
+      title: title.trim(),
+      description: description.trim() || undefined,
+      subjects: subjectIds,
+      createdBy: "local-teacher",
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    onCreate(payload);
+    setTitle("");
+    setDescription("");
+    setSubjectIds([]);
+    onClose();
+  };
+
+  return (
+    <ModalShell
+      open={open}
+      title="Create combination"
+      subtitle="Combinations group subjects (e.g. STEM)."
+      onClose={onClose}
+      footer={
+        <>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-full border border-white/20 px-5 py-2 text-sm font-semibold text-white transition hover:border-white/40"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            form="create-combination-form"
+            className="rounded-full bg-emerald-400 px-6 py-2 text-sm font-semibold text-emerald-950 transition hover:bg-emerald-300"
+          >
+            Create
+          </button>
+        </>
+      }
+    >
+      <form
+        id="create-combination-form"
+        className="space-y-4"
+        onSubmit={handleSubmit}
+      >
+        <div>
+          <label className="text-xs font-semibold uppercase tracking-[0.26em] text-white/50">
+            Title
+          </label>
+          <input
+            value={title}
+            onChange={(e) => setTitle(e.currentTarget.value)}
+            required
+            className="mt-2 w-full rounded-xl border border-white/10 bg-[#0f1117] px-4 py-3 text-sm text-white placeholder:text-white/40 focus:border-emerald-400/70 focus:outline-none"
+            placeholder="e.g. S1 STEM"
+          />
+        </div>
+
+        <div>
+          <label className="text-xs font-semibold uppercase tracking-[0.26em] text-white/50">
+            Description (optional)
+          </label>
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.currentTarget.value)}
+            rows={3}
+            className="mt-2 w-full rounded-xl border border-white/10 bg-[#0f1117] px-4 py-3 text-sm text-white placeholder:text-white/40 focus:border-emerald-400/70 focus:outline-none"
+            placeholder="Short combination description"
+          />
+        </div>
+
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.26em] text-white/50">
+            Subjects (required)
+          </p>
+          <div className="mt-2 grid gap-2 sm:grid-cols-2">
+            {subjects.map((s) => {
+              const checked = subjectIds.includes(s._id);
+              return (
+                <label
+                  key={s._id}
+                  className="flex items-center gap-3 rounded-xl border border-white/10 bg-[#0f1117] px-4 py-3 text-sm text-white/70"
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => toggleSubject(s._id)}
+                    className="size-4 rounded border-white/30 bg-transparent text-emerald-400 focus:ring-emerald-500"
+                    required={subjectIds.length === 0}
+                  />
+                  {s.title}
+                </label>
+              );
+            })}
+            {!subjects.length ? (
+              <p className="text-sm text-white/50">No subjects found.</p>
+            ) : null}
+          </div>
+        </div>
+      </form>
+    </ModalShell>
+  );
+}
+
+export function CreateSubjectModal({
+  open,
+  onClose,
+  curriculums,
+  levels,
+  classes,
+  combinations,
+  onCreate,
+  defaultCurriculumId,
+}: BaseModalProps & {
+  curriculums: Curriculum[];
+  levels: AcademicLevel[];
+  classes: AcademicClass[];
+  combinations: ClassCombination[];
   onCreate: (subject: Subject) => void;
   defaultCurriculumId?: ObjectIdString | null;
 }) {
@@ -148,6 +579,10 @@ export function CreateSubjectModal({
     defaultCurriculumId ?? fallbackCurriculumId
   );
   const [targetLevelIds, setTargetLevelIds] = useState<ObjectIdString[]>([]);
+  const [targetClassIds, setTargetClassIds] = useState<ObjectIdString[]>([]);
+  const [targetCombinationIds, setTargetCombinationIds] = useState<
+    ObjectIdString[]
+  >([]);
 
   const availableLevels = useMemo(
     () => levels.filter((level) => level.curriculum === curriculumId),
@@ -156,6 +591,25 @@ export function CreateSubjectModal({
 
   const toggleLevel = (id: ObjectIdString) => {
     setTargetLevelIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  };
+
+  const availableClasses = useMemo(
+    () => classes.filter((c) => c.curriculum === curriculumId),
+    [classes, curriculumId]
+  );
+
+  const availableCombinations = useMemo(() => combinations, [combinations]);
+
+  const toggleClass = (id: ObjectIdString) => {
+    setTargetClassIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  };
+
+  const toggleCombination = (id: ObjectIdString) => {
+    setTargetCombinationIds((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
     );
   };
@@ -170,6 +624,10 @@ export function CreateSubjectModal({
       description: description.trim() || undefined,
       curriculum: curriculumId,
       targetLevels: targetLevelIds.length ? targetLevelIds : undefined,
+      targetClasses: targetClassIds.length ? targetClassIds : undefined,
+      targetCombinations: targetCombinationIds.length
+        ? targetCombinationIds
+        : undefined,
       createdBy: "local-teacher",
       createdAt: now,
       updatedAt: now,
@@ -180,6 +638,8 @@ export function CreateSubjectModal({
     setDescription("");
     setCurriculumId(defaultCurriculumId ?? fallbackCurriculumId);
     setTargetLevelIds([]);
+    setTargetClassIds([]);
+    setTargetCombinationIds([]);
     onClose();
   };
 
@@ -219,7 +679,12 @@ export function CreateSubjectModal({
           </label>
           <select
             value={curriculumId}
-            onChange={(e) => setCurriculumId(e.currentTarget.value)}
+            onChange={(e) => {
+              setCurriculumId(e.currentTarget.value);
+              setTargetLevelIds([]);
+              setTargetClassIds([]);
+              setTargetCombinationIds([]);
+            }}
             className="mt-2 w-full rounded-xl border border-white/10 bg-[#0f1117] px-4 py-3 text-sm text-white focus:border-emerald-400/70 focus:outline-none"
           >
             {curriculums.map((c) => (
@@ -282,6 +747,64 @@ export function CreateSubjectModal({
               <p className="text-sm text-white/50">
                 No levels found for this curriculum.
               </p>
+            ) : null}
+          </div>
+        </div>
+
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.26em] text-white/50">
+            Target classes (optional)
+          </p>
+          <div className="mt-2 grid gap-2 sm:grid-cols-2">
+            {availableClasses.map((academicClass) => {
+              const checked = targetClassIds.includes(academicClass._id);
+              return (
+                <label
+                  key={academicClass._id}
+                  className="flex items-center gap-3 rounded-xl border border-white/10 bg-[#0f1117] px-4 py-3 text-sm text-white/70"
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => toggleClass(academicClass._id)}
+                    className="size-4 rounded border-white/30 bg-transparent text-emerald-400 focus:ring-emerald-500"
+                  />
+                  {academicClass.title}
+                </label>
+              );
+            })}
+            {!availableClasses.length ? (
+              <p className="text-sm text-white/50">
+                No classes found for this curriculum.
+              </p>
+            ) : null}
+          </div>
+        </div>
+
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.26em] text-white/50">
+            Target combinations (optional)
+          </p>
+          <div className="mt-2 grid gap-2 sm:grid-cols-2">
+            {availableCombinations.map((combo) => {
+              const checked = targetCombinationIds.includes(combo._id);
+              return (
+                <label
+                  key={combo._id}
+                  className="flex items-center gap-3 rounded-xl border border-white/10 bg-[#0f1117] px-4 py-3 text-sm text-white/70"
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => toggleCombination(combo._id)}
+                    className="size-4 rounded border-white/30 bg-transparent text-emerald-400 focus:ring-emerald-500"
+                  />
+                  {combo.title}
+                </label>
+              );
+            })}
+            {!availableCombinations.length ? (
+              <p className="text-sm text-white/50">No combinations found.</p>
             ) : null}
           </div>
         </div>

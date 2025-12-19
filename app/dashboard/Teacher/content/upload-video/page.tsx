@@ -5,7 +5,10 @@ import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 
 import {
   CreateCourseModal,
+  CreateLevelModal,
   CreateCurriculumModal,
+  CreateClassModal,
+  CreateCombinationModal,
   CreateLessonModal,
   CreateSubjectModal,
 } from "@/components/TeacherContent/CreateEntityModals";
@@ -15,6 +18,9 @@ import type {
   Course,
   Curriculum,
   Lesson,
+  AcademicLevel,
+  AcademicClass,
+  ClassCombination,
   ObjectIdString,
   Subject,
   Video,
@@ -22,6 +28,9 @@ import type {
 
 type WizardStep =
   | "curriculum"
+  | "level"
+  | "class"
+  | "combination"
   | "subject"
   | "course"
   | "lesson"
@@ -74,6 +83,11 @@ export default function UploadVideoWizardPage() {
     curriculums,
     setCurriculums,
     levels,
+    setLevels,
+    classes,
+    setClasses,
+    combinations,
+    setCombinations,
     subjects,
     setSubjects,
     courses,
@@ -89,6 +103,17 @@ export default function UploadVideoWizardPage() {
   const [selectedCurriculumId, setSelectedCurriculumId] = useState<
     ObjectIdString | ""
   >(curriculums[0]?._id ?? "");
+
+  const [selectedLevelId, setSelectedLevelId] = useState<ObjectIdString | "">(
+    ""
+  );
+  const [selectedClassId, setSelectedClassId] = useState<ObjectIdString | "">(
+    ""
+  );
+  const [selectedCombinationId, setSelectedCombinationId] = useState<
+    ObjectIdString | ""
+  >("");
+
   const [selectedSubjectId, setSelectedSubjectId] = useState<
     ObjectIdString | ""
   >("");
@@ -106,6 +131,9 @@ export default function UploadVideoWizardPage() {
   );
 
   const [isCreateCurriculumOpen, setCreateCurriculumOpen] = useState(false);
+  const [isCreateLevelOpen, setCreateLevelOpen] = useState(false);
+  const [isCreateClassOpen, setCreateClassOpen] = useState(false);
+  const [isCreateCombinationOpen, setCreateCombinationOpen] = useState(false);
   const [isCreateSubjectOpen, setCreateSubjectOpen] = useState(false);
   const [isCreateCourseOpen, setCreateCourseOpen] = useState(false);
   const [isCreateLessonOpen, setCreateLessonOpen] = useState(false);
@@ -139,8 +167,66 @@ export default function UploadVideoWizardPage() {
 
   const availableSubjects = useMemo(() => {
     if (!selectedCurriculumId) return [];
-    return subjects.filter((s) => s.curriculum === selectedCurriculumId);
-  }, [selectedCurriculumId, subjects]);
+    return subjects.filter((s) => {
+      if (s.curriculum !== selectedCurriculumId) return false;
+
+      if (selectedLevelId) {
+        const allowed = s.targetLevels;
+        if (allowed?.length && !allowed.includes(selectedLevelId)) return false;
+      }
+
+      if (selectedClassId) {
+        const allowed = s.targetClasses;
+        if (allowed?.length && !allowed.includes(selectedClassId)) return false;
+      }
+
+      if (selectedCombinationId) {
+        const allowed = s.targetCombinations;
+        if (allowed?.length && !allowed.includes(selectedCombinationId))
+          return false;
+      }
+
+      return true;
+    });
+  }, [
+    selectedClassId,
+    selectedCombinationId,
+    selectedCurriculumId,
+    selectedLevelId,
+    subjects,
+  ]);
+
+  const availableLevels = useMemo(() => {
+    if (!selectedCurriculumId) return [];
+    return levels
+      .filter((l) => l.curriculum === selectedCurriculumId)
+      .slice()
+      .sort((a, b) => a.order - b.order);
+  }, [levels, selectedCurriculumId]);
+
+  const availableClasses = useMemo(() => {
+    if (!selectedCurriculumId) return [];
+    const filtered = classes.filter(
+      (c) => c.curriculum === selectedCurriculumId
+    );
+    if (!selectedLevelId) return filtered;
+    return filtered.filter((c) => c.academicLevel === selectedLevelId);
+  }, [classes, selectedCurriculumId, selectedLevelId]);
+
+  const availableCombinations = useMemo(() => {
+    if (!selectedCurriculumId) return [];
+
+    const subjectCurriculumById = new Map<ObjectIdString, ObjectIdString>();
+    subjects.forEach((s) => {
+      subjectCurriculumById.set(s._id, s.curriculum);
+    });
+
+    return combinations.filter((combo) =>
+      combo.subjects.some(
+        (id) => subjectCurriculumById.get(id) === selectedCurriculumId
+      )
+    );
+  }, [combinations, selectedCurriculumId, subjects]);
 
   const availableCourses = useMemo(() => {
     if (!selectedSubjectId) return [];
@@ -159,6 +245,18 @@ export default function UploadVideoWizardPage() {
     () => curriculums.find((c) => c._id === selectedCurriculumId) ?? null,
     [curriculums, selectedCurriculumId]
   );
+  const selectedLevel = useMemo(
+    () => levels.find((l) => l._id === selectedLevelId) ?? null,
+    [levels, selectedLevelId]
+  );
+  const selectedClass = useMemo(
+    () => classes.find((c) => c._id === selectedClassId) ?? null,
+    [classes, selectedClassId]
+  );
+  const selectedCombination = useMemo(
+    () => combinations.find((c) => c._id === selectedCombinationId) ?? null,
+    [combinations, selectedCombinationId]
+  );
   const selectedSubject = useMemo(
     () => subjects.find((s) => s._id === selectedSubjectId) ?? null,
     [selectedSubjectId, subjects]
@@ -174,6 +272,9 @@ export default function UploadVideoWizardPage() {
 
   const handleCurriculumChange = (id: string) => {
     setSelectedCurriculumId(id);
+    setSelectedLevelId("");
+    setSelectedClassId("");
+    setSelectedCombinationId("");
     setSelectedSubjectId("");
     setSelectedCourseId("");
     setSelectedLessonId("");
@@ -209,6 +310,9 @@ export default function UploadVideoWizardPage() {
   };
 
   const canGoNextFromCurriculum = Boolean(selectedCurriculumId);
+  const canGoNextFromLevel = true;
+  const canGoNextFromClass = true;
+  const canGoNextFromCombination = true;
   const canGoNextFromSubject = Boolean(selectedSubjectId);
   const canGoNextFromCourse = Boolean(selectedCourseId);
   const canGoNextFromLesson = Boolean(selectedLessonId);
@@ -218,6 +322,21 @@ export default function UploadVideoWizardPage() {
     setSubmitError(null);
     if (step === "curriculum") {
       if (!canGoNextFromCurriculum) return;
+      setStep("level");
+      return;
+    }
+    if (step === "level") {
+      if (!canGoNextFromLevel) return;
+      setStep("class");
+      return;
+    }
+    if (step === "class") {
+      if (!canGoNextFromClass) return;
+      setStep("combination");
+      return;
+    }
+    if (step === "combination") {
+      if (!canGoNextFromCombination) return;
       setStep("subject");
       return;
     }
@@ -244,7 +363,10 @@ export default function UploadVideoWizardPage() {
 
   const back = () => {
     setSubmitError(null);
-    if (step === "subject") return setStep("curriculum");
+    if (step === "level") return setStep("curriculum");
+    if (step === "class") return setStep("level");
+    if (step === "combination") return setStep("class");
+    if (step === "subject") return setStep("combination");
     if (step === "course") return setStep("subject");
     if (step === "lesson") return setStep("course");
     if (step === "video") return setStep("lesson");
@@ -381,6 +503,9 @@ export default function UploadVideoWizardPage() {
 
   const steps = [
     { key: "curriculum", title: "Curriculum" },
+    { key: "level", title: "Level" },
+    { key: "class", title: "Class" },
+    { key: "combination", title: "Combination" },
     { key: "subject", title: "Subject" },
     { key: "course", title: "Course" },
     { key: "lesson", title: "Lesson" },
@@ -398,6 +523,18 @@ export default function UploadVideoWizardPage() {
       {
         label: "Curriculum",
         value: selectedCurriculum?.title ?? "-",
+      },
+      {
+        label: "Level",
+        value: selectedLevel?.title ?? "-",
+      },
+      {
+        label: "Class",
+        value: selectedClass?.title ?? "-",
+      },
+      {
+        label: "Combination",
+        value: selectedCombination?.title ?? "-",
       },
       {
         label: "Subject",
@@ -423,6 +560,9 @@ export default function UploadVideoWizardPage() {
   }, [
     selectedCourse?.title,
     selectedCurriculum?.title,
+    selectedLevel?.title,
+    selectedClass?.title,
+    selectedCombination?.title,
     selectedLesson?.title,
     selectedSubject?.title,
     thumbnailFile?.name,
@@ -503,6 +643,157 @@ export default function UploadVideoWizardPage() {
             </div>
           ) : null}
 
+          {step === "level" ? (
+            <div className="space-y-5">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <h2 className="text-lg font-semibold text-white">
+                    Target level
+                  </h2>
+                  <p className="mt-1 text-sm text-white/50">
+                    Optional: select a target level to narrow down subjects.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setCreateLevelOpen(true)}
+                  className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white transition hover:border-white/20 hover:bg-white/10"
+                >
+                  Create new
+                </button>
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-[0.26em] text-white/50">
+                  Level
+                </label>
+                <select
+                  value={selectedLevelId}
+                  onChange={(e) => {
+                    setSelectedLevelId(e.currentTarget.value);
+                    setSelectedClassId("");
+                    setSelectedSubjectId("");
+                    setSelectedCourseId("");
+                    setSelectedLessonId("");
+                  }}
+                  className="mt-2 w-full rounded-xl border border-white/10 bg-[#0f1117] px-4 py-3 text-sm text-white focus:border-emerald-400/70 focus:outline-none"
+                >
+                  <option value="">All levels</option>
+                  {availableLevels.map((l) => (
+                    <option key={l._id} value={l._id}>
+                      {l.title}
+                    </option>
+                  ))}
+                </select>
+                {!availableLevels.length ? (
+                  <p className="mt-2 text-sm text-white/50">
+                    No levels found for this curriculum.
+                  </p>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
+
+          {step === "class" ? (
+            <div className="space-y-5">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <h2 className="text-lg font-semibold text-white">
+                    Target class
+                  </h2>
+                  <p className="mt-1 text-sm text-white/50">
+                    Optional: select a class to narrow down subjects.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setCreateClassOpen(true)}
+                  className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white transition hover:border-white/20 hover:bg-white/10"
+                >
+                  Create new
+                </button>
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-[0.26em] text-white/50">
+                  Class
+                </label>
+                <select
+                  value={selectedClassId}
+                  onChange={(e) => {
+                    setSelectedClassId(e.currentTarget.value);
+                    setSelectedSubjectId("");
+                    setSelectedCourseId("");
+                    setSelectedLessonId("");
+                  }}
+                  className="mt-2 w-full rounded-xl border border-white/10 bg-[#0f1117] px-4 py-3 text-sm text-white focus:border-emerald-400/70 focus:outline-none"
+                >
+                  <option value="">All classes</option>
+                  {availableClasses.map((c) => (
+                    <option key={c._id} value={c._id}>
+                      {c.title}
+                    </option>
+                  ))}
+                </select>
+                {!availableClasses.length ? (
+                  <p className="mt-2 text-sm text-white/50">
+                    No classes found for this curriculum/level.
+                  </p>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
+
+          {step === "combination" ? (
+            <div className="space-y-5">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <h2 className="text-lg font-semibold text-white">
+                    Target combination
+                  </h2>
+                  <p className="mt-1 text-sm text-white/50">
+                    Optional: select a combination to narrow down subjects.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setCreateCombinationOpen(true)}
+                  className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white transition hover:border-white/20 hover:bg-white/10"
+                >
+                  Create new
+                </button>
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-[0.26em] text-white/50">
+                  Combination
+                </label>
+                <select
+                  value={selectedCombinationId}
+                  onChange={(e) => {
+                    setSelectedCombinationId(e.currentTarget.value);
+                    setSelectedSubjectId("");
+                    setSelectedCourseId("");
+                    setSelectedLessonId("");
+                  }}
+                  className="mt-2 w-full rounded-xl border border-white/10 bg-[#0f1117] px-4 py-3 text-sm text-white focus:border-emerald-400/70 focus:outline-none"
+                >
+                  <option value="">All combinations</option>
+                  {availableCombinations.map((combo) => (
+                    <option key={combo._id} value={combo._id}>
+                      {combo.title}
+                    </option>
+                  ))}
+                </select>
+                {!availableCombinations.length ? (
+                  <p className="mt-2 text-sm text-white/50">
+                    No combinations found for this curriculum.
+                  </p>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
+
           {step === "subject" ? (
             <div className="space-y-5">
               <div className="flex items-center justify-between gap-4">
@@ -511,7 +802,8 @@ export default function UploadVideoWizardPage() {
                     Choose subject
                   </h2>
                   <p className="mt-1 text-sm text-white/50">
-                    Subjects belong to the selected curriculum.
+                    Subjects belong to the selected curriculum (and are filtered
+                    by targets).
                   </p>
                 </div>
                 <button
@@ -543,7 +835,7 @@ export default function UploadVideoWizardPage() {
                 </select>
                 {!availableSubjects.length ? (
                   <p className="mt-2 text-sm text-white/50">
-                    No subjects found for this curriculum.
+                    No subjects found for the chosen curriculum/targets.
                   </p>
                 ) : null}
               </div>
@@ -839,6 +1131,9 @@ export default function UploadVideoWizardPage() {
                 onClick={next}
                 disabled={
                   (step === "curriculum" && !canGoNextFromCurriculum) ||
+                  (step === "level" && !canGoNextFromLevel) ||
+                  (step === "class" && !canGoNextFromClass) ||
+                  (step === "combination" && !canGoNextFromCombination) ||
                   (step === "subject" && !canGoNextFromSubject) ||
                   (step === "course" && !canGoNextFromCourse) ||
                   (step === "lesson" && !canGoNextFromLesson) ||
@@ -859,6 +1154,56 @@ export default function UploadVideoWizardPage() {
         onCreate={(curriculum: Curriculum) => {
           setCurriculums((prev) => [curriculum, ...prev]);
           setSelectedCurriculumId(curriculum._id);
+          setSelectedLevelId("");
+          setSelectedClassId("");
+          setSelectedCombinationId("");
+          setSelectedSubjectId("");
+          setSelectedCourseId("");
+          setSelectedLessonId("");
+        }}
+      />
+
+      <CreateLevelModal
+        open={isCreateLevelOpen}
+        onClose={() => setCreateLevelOpen(false)}
+        curriculums={curriculums}
+        defaultCurriculumId={selectedCurriculumId || null}
+        onCreate={(level: AcademicLevel) => {
+          setLevels((prev) => [level, ...prev]);
+          setSelectedCurriculumId(level.curriculum);
+          setSelectedLevelId(level._id);
+          setSelectedClassId("");
+          setSelectedSubjectId("");
+          setSelectedCourseId("");
+          setSelectedLessonId("");
+        }}
+      />
+
+      <CreateClassModal
+        open={isCreateClassOpen}
+        onClose={() => setCreateClassOpen(false)}
+        curriculums={curriculums}
+        levels={levels}
+        defaultCurriculumId={selectedCurriculumId || null}
+        defaultLevelId={selectedLevelId || null}
+        onCreate={(academicClass: AcademicClass) => {
+          setClasses((prev) => [academicClass, ...prev]);
+          setSelectedCurriculumId(academicClass.curriculum);
+          setSelectedLevelId(academicClass.academicLevel);
+          setSelectedClassId(academicClass._id);
+          setSelectedSubjectId("");
+          setSelectedCourseId("");
+          setSelectedLessonId("");
+        }}
+      />
+
+      <CreateCombinationModal
+        open={isCreateCombinationOpen}
+        onClose={() => setCreateCombinationOpen(false)}
+        subjects={subjects.filter((s) => s.curriculum === selectedCurriculumId)}
+        onCreate={(combination: ClassCombination) => {
+          setCombinations((prev) => [combination, ...prev]);
+          setSelectedCombinationId(combination._id);
           setSelectedSubjectId("");
           setSelectedCourseId("");
           setSelectedLessonId("");
@@ -870,10 +1215,15 @@ export default function UploadVideoWizardPage() {
         onClose={() => setCreateSubjectOpen(false)}
         curriculums={curriculums}
         levels={levels}
+        classes={classes}
+        combinations={combinations}
         defaultCurriculumId={selectedCurriculumId || null}
         onCreate={(subject: Subject) => {
           setSubjects((prev) => [subject, ...prev]);
           setSelectedCurriculumId(subject.curriculum);
+          setSelectedLevelId("");
+          setSelectedClassId("");
+          setSelectedCombinationId("");
           setSelectedSubjectId(subject._id);
           setSelectedCourseId("");
           setSelectedLessonId("");

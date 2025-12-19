@@ -11,6 +11,8 @@ import {
 import {
   mockCourses,
   mockCurriculums,
+  mockClasses,
+  mockCombinations,
   mockLessons,
   mockLevels,
   mockSubjects,
@@ -56,8 +58,9 @@ const TeacherContentContext = createContext<TeacherContentStore | null>(null);
 export function TeacherContentProvider({ children }: { children: ReactNode }) {
   const [curriculums, setCurriculums] = useState<Curriculum[]>(mockCurriculums);
   const [levels, setLevels] = useState<AcademicLevel[]>(mockLevels);
-  const [classes, setClasses] = useState<AcademicClass[]>([]);
-  const [combinations, setCombinations] = useState<ClassCombination[]>([]);
+  const [classes, setClasses] = useState<AcademicClass[]>(mockClasses);
+  const [combinations, setCombinations] =
+    useState<ClassCombination[]>(mockCombinations);
   const [subjects, setSubjects] = useState<Subject[]>(mockSubjects);
   const [courses, setCourses] = useState<Course[]>(mockCourses);
   const [lessons, setLessons] = useState<Lesson[]>(mockLessons);
