@@ -20,6 +20,10 @@ type TeacherRegisterFormValues = {
   password: string;
   confirmPassword: string;
   fullName: string;
+  dob: string;
+  nationalId: string;
+  profilePicture: FileList | null;
+  bio: string;
   phone: string;
   country: string;
   city: string;
@@ -28,7 +32,7 @@ type TeacherRegisterFormValues = {
   teacherTitle: string;
   yearsExperience: string;
   highestQualification: string;
-  subjects: string;
+  subjects: string[];
   preferredCurriculum: string;
   agreeToTerms: boolean;
 };
@@ -48,6 +52,7 @@ export default function RegisterPage() {
     watch,
     getValues,
     control,
+    setValue,
   } = useForm<TeacherRegisterFormValues>({
     mode: "onChange",
     defaultValues: {
@@ -55,6 +60,10 @@ export default function RegisterPage() {
       password: "",
       confirmPassword: "",
       fullName: "",
+      dob: "",
+      nationalId: "",
+      profilePicture: null,
+      bio: "",
       phone: "",
       country: "",
       city: "",
@@ -63,7 +72,7 @@ export default function RegisterPage() {
       teacherTitle: "",
       yearsExperience: "",
       highestQualification: "",
-      subjects: "",
+      subjects: [],
       preferredCurriculum: "",
       agreeToTerms: false,
     },
@@ -136,6 +145,30 @@ export default function RegisterPage() {
 
   const onValidSubmit = (values: TeacherRegisterFormValues) => {
     console.log("Register teacher (UI-only)", values);
+  };
+
+  const [subjectDraft, setSubjectDraft] = useState("");
+
+  const addSubjects = (raw: string) => {
+    const candidates = raw
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+    if (!candidates.length) return;
+
+    const current = getValues("subjects") ?? [];
+    const next = Array.from(new Set([...current, ...candidates]));
+    setValue("subjects", next, { shouldDirty: true, shouldValidate: false });
+  };
+
+  const removeSubject = (subject: string) => {
+    const current = getValues("subjects") ?? [];
+    setValue(
+      "subjects",
+      current.filter((s) => s !== subject),
+      { shouldDirty: true, shouldValidate: false }
+    );
   };
 
   return (
@@ -280,6 +313,44 @@ export default function RegisterPage() {
                         </p>
                       ) : null}
                     </Field>
+
+                    <Field>
+                      <FieldLabel htmlFor="dob">Date of birth</FieldLabel>
+                      <Input id="dob" type="date" {...register("dob")} />
+                    </Field>
+
+                    <Field>
+                      <FieldLabel htmlFor="nationalId">National ID</FieldLabel>
+                      <Input
+                        id="nationalId"
+                        placeholder="Optional"
+                        {...register("nationalId")}
+                      />
+                    </Field>
+
+                    <Field className="sm:col-span-2">
+                      <FieldLabel htmlFor="bio">Bio</FieldLabel>
+                      <textarea
+                        id="bio"
+                        rows={3}
+                        placeholder="Tell students a bit about you (optional)"
+                        {...register("bio")}
+                        className="mt-2 w-full rounded-xl border border-white/10 bg-[#0f1117] px-4 py-3 text-sm text-white placeholder:text-white/40 focus:border-emerald-400/70 focus:outline-none"
+                      />
+                    </Field>
+
+                    <Field className="sm:col-span-2">
+                      <FieldLabel htmlFor="profilePicture">
+                        Profile picture
+                      </FieldLabel>
+                      <Input
+                        id="profilePicture"
+                        type="file"
+                        accept="image/*"
+                        {...register("profilePicture")}
+                      />
+                    </Field>
+
                     <Field>
                       <FieldLabel htmlFor="teacherTitle">Title</FieldLabel>
                       <Input
@@ -338,11 +409,64 @@ export default function RegisterPage() {
                       <FieldLabel htmlFor="subjects">
                         Subjects you teach
                       </FieldLabel>
-                      <Input
-                        id="subjects"
-                        placeholder="e.g. Mathematics, Physics"
-                        {...register("subjects")}
-                      />
+                      <div className="mt-2 rounded-xl border border-white/10 bg-[#0f1117] px-4 py-3">
+                        <div className="flex flex-wrap gap-2">
+                          {(form.subjects ?? []).map((subject) => (
+                            <span
+                              key={subject}
+                              className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-white/80"
+                            >
+                              {subject}
+                              <button
+                                type="button"
+                                onClick={() => removeSubject(subject)}
+                                className="text-white/60 transition hover:text-white"
+                                aria-label={`Remove ${subject}`}
+                              >
+                                ×
+                              </button>
+                            </span>
+                          ))}
+                        </div>
+
+                        <input
+                          id="subjects"
+                          value={subjectDraft}
+                          onChange={(e) => {
+                            const nextValue = e.currentTarget.value;
+                            if (nextValue.includes(",")) {
+                              addSubjects(nextValue);
+                              setSubjectDraft("");
+                              return;
+                            }
+                            setSubjectDraft(nextValue);
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === "," || e.key === "Enter") {
+                              e.preventDefault();
+                              addSubjects(subjectDraft);
+                              setSubjectDraft("");
+                            }
+                            if (
+                              e.key === "Backspace" &&
+                              !subjectDraft &&
+                              (form.subjects?.length ?? 0) > 0
+                            ) {
+                              const last =
+                                form.subjects?.[form.subjects.length - 1];
+                              if (last) removeSubject(last);
+                            }
+                          }}
+                          onBlur={() => {
+                            if (subjectDraft.trim()) {
+                              addSubjects(subjectDraft);
+                              setSubjectDraft("");
+                            }
+                          }}
+                          placeholder="Type a subject and press comma"
+                          className="mt-3 w-full bg-transparent text-sm text-white placeholder:text-white/40 focus:outline-none"
+                        />
+                      </div>
                     </Field>
                   </div>
                 ) : null}
@@ -454,6 +578,16 @@ export default function RegisterPage() {
                         </div>
                       </div>
                       <div>
+                        <div className="text-xs text-white/50">DOB</div>
+                        <div className="font-semibold">{form.dob || "-"}</div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-white/50">National ID</div>
+                        <div className="font-semibold">
+                          {form.nationalId || "-"}
+                        </div>
+                      </div>
+                      <div>
                         <div className="text-xs text-white/50">Phone</div>
                         <div className="font-semibold">{form.phone || "-"}</div>
                       </div>
@@ -466,7 +600,23 @@ export default function RegisterPage() {
                       <div>
                         <div className="text-xs text-white/50">Subjects</div>
                         <div className="font-semibold">
-                          {form.subjects || "-"}
+                          {(form.subjects ?? []).length
+                            ? (form.subjects ?? []).join(", ")
+                            : "-"}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-white/50">Bio</div>
+                        <div className="font-semibold">
+                          {form.bio?.trim() ? form.bio : "-"}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-white/50">
+                          Profile picture
+                        </div>
+                        <div className="font-semibold">
+                          {form.profilePicture?.[0]?.name ?? "-"}
                         </div>
                       </div>
                     </div>
