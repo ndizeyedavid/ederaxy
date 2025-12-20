@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { ArrowLeft, FileText, Plus, Upload } from "lucide-react";
 
@@ -13,6 +13,9 @@ import { useTeacherContentStore } from "@/components/TeacherContent/TeacherConte
 import { UploadLessonVideoModal } from "@/components/TeacherContent/UploadLessonVideoModal";
 import { VideoStatusBadge } from "@/components/TeacherContent/VideoStatusBadge";
 import type { Lesson, Video } from "@/lib/mock/teacherData";
+import { listLessons } from "@/lib/api/lessons";
+import { getLessonVideo } from "@/lib/api/video";
+import { ApiError } from "@/lib/api/client";
 
 function LessonRow({
   lesson,
@@ -24,9 +27,8 @@ function LessonRow({
   onAddResource: (lessonId: Lesson["_id"]) => void;
 }) {
   const { videos } = useTeacherContentStore();
-  const video: Video | null = lesson.video
-    ? videos.find((v) => v.lesson === lesson._id) ?? null
-    : null;
+  const video: Video | null =
+    videos.find((v) => v.lesson === lesson._id) ?? null;
   const status = video?.status ?? "none";
 
   return (
@@ -123,6 +125,7 @@ export default function CourseDetailPage() {
     subjects,
     lessons: allLessons,
     setLessons,
+    setVideos,
   } = useTeacherContentStore();
   const [isCreateLessonOpen, setCreateLessonOpen] = useState(false);
   const [uploadLessonId, setUploadLessonId] = useState<Lesson["_id"] | null>(
@@ -149,6 +152,117 @@ export default function CourseDetailPage() {
       .slice()
       .sort((a, b) => a.order - b.order);
   }, [allLessons, courseId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!courseId) return;
+
+    (async () => {
+      try {
+        const res = await listLessons({ courseId });
+        if (cancelled) return;
+
+        setLessons((prev) => {
+          const next = new Map<string, Lesson>();
+          prev.forEach((l) => next.set(l._id, l));
+          res.lessons.forEach((l) => next.set(l._id, l));
+          return Array.from(next.values());
+        });
+      } catch {
+        if (cancelled) return;
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [courseId, setLessons]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!courseId) return;
+
+    const lessonIds = allLessons
+      .filter((lesson) => lesson.course === courseId)
+      .map((lesson) => lesson._id);
+
+    if (!lessonIds.length) return;
+
+    (async () => {
+      const results = await Promise.allSettled(
+        lessonIds.map(async (lessonId) => {
+          const res = await getLessonVideo(lessonId);
+          return res.video;
+        })
+      );
+
+      if (cancelled) return;
+
+      const fetched: Video[] = [];
+      results.forEach((r) => {
+        if (r.status === "fulfilled") {
+          const v = r.value as any;
+          fetched.push({
+            _id: String(v._id ?? v.id ?? ""),
+            lesson: String(v.lesson ?? v.lessonId ?? ""),
+            uploadedBy: String(v.uploadedBy ?? v.createdBy ?? v.userId ?? ""),
+            originalFileName: String(v.originalFileName ?? v.fileName ?? ""),
+            mimeType: String(v.mimeType ?? v.contentType ?? ""),
+            size: Number(v.size ?? 0),
+            thumbnailUrl: v.thumbnailUrl ? String(v.thumbnailUrl) : undefined,
+            thumbnailOriginalFileName: v.thumbnailOriginalFileName
+              ? String(v.thumbnailOriginalFileName)
+              : undefined,
+            storageKey: String(v.storageKey ?? ""),
+            originalPath: String(v.originalPath ?? ""),
+            hlsDirectory: String(v.hlsDirectory ?? ""),
+            hlsMasterPlaylistPath:
+              v.hlsMasterPlaylistPath === null ||
+              typeof v.hlsMasterPlaylistPath === "string"
+                ? v.hlsMasterPlaylistPath
+                : null,
+            variants: Array.isArray(v.variants) ? v.variants : [],
+            duration:
+              v.duration === null || typeof v.duration === "number"
+                ? v.duration
+                : null,
+            status: String(v.status ?? "uploaded") as any,
+            failureReason: v.failureReason
+              ? String(v.failureReason)
+              : undefined,
+            jobId: v.jobId ? String(v.jobId) : undefined,
+            processingStartedAt: v.processingStartedAt
+              ? String(v.processingStartedAt)
+              : undefined,
+            processingCompletedAt: v.processingCompletedAt
+              ? String(v.processingCompletedAt)
+              : undefined,
+            createdAt: String(v.createdAt ?? new Date().toISOString()),
+            updatedAt: String(
+              v.updatedAt ?? v.createdAt ?? new Date().toISOString()
+            ),
+          });
+        }
+        if (r.status === "rejected") {
+          const err = r.reason;
+          if (err instanceof ApiError && err.statusCode === 404) return;
+        }
+      });
+
+      if (!fetched.length) return;
+
+      setVideos((prev) => {
+        const next = new Map<string, Video>();
+        prev.forEach((v) => next.set(v._id, v));
+        fetched.forEach((v) => next.set(v._id, v));
+        return Array.from(next.values());
+      });
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [allLessons, courseId, setVideos]);
 
   if (!course) {
     return (
