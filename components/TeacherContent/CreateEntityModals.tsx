@@ -158,13 +158,9 @@ export function CreateLevelModal({
   onCreate: (level: AcademicLevel) => void;
   defaultCurriculumId?: ObjectIdString | null;
 }) {
-  const fallbackCurriculumId = curriculums[0]?._id ?? "";
-
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [curriculumId, setCurriculumId] = useState(
-    defaultCurriculumId ?? fallbackCurriculumId
-  );
+  const [curriculumId, setCurriculumId] = useState(defaultCurriculumId ?? "");
   const [stage, setStage] = useState("");
   const [order, setOrder] = useState<number>(1);
   const [isSubmitting, setSubmitting] = useState(false);
@@ -174,6 +170,12 @@ export function CreateLevelModal({
     event.preventDefault();
 
     setSubmitError(null);
+
+    if (!curriculumId) {
+      setSubmitError("Please choose a curriculum.");
+      return;
+    }
+
     setSubmitting(true);
     try {
       const res = await createAcademicLevel({
@@ -187,7 +189,7 @@ export function CreateLevelModal({
       setTitle("");
       setDescription("");
       setStage("");
-      setCurriculumId(defaultCurriculumId ?? fallbackCurriculumId);
+      setCurriculumId(defaultCurriculumId ?? "");
       setOrder(1);
       onClose();
     } catch (err) {
@@ -241,6 +243,9 @@ export function CreateLevelModal({
             onChange={(e) => setCurriculumId(e.currentTarget.value)}
             className="mt-2 w-full rounded-xl border border-white/10 bg-[#0f1117] px-4 py-3 text-sm text-white focus:border-emerald-400/70 focus:outline-none"
           >
+            <option value="" disabled>
+              Choose an option
+            </option>
             {curriculums.map((c) => (
               <option key={c._id} value={c._id}>
                 {c.title}
@@ -327,9 +332,7 @@ export function CreateClassModal({
   const [title, setTitle] = useState("");
   const [code, setCode] = useState("");
   const [description, setDescription] = useState("");
-  const [curriculumId, setCurriculumId] = useState(
-    defaultCurriculumId ?? fallbackCurriculumId
-  );
+  const [curriculumId, setCurriculumId] = useState(defaultCurriculumId ?? "");
 
   const availableLevels = useMemo(
     () => levels.filter((l) => l.curriculum === curriculumId),
@@ -349,6 +352,17 @@ export function CreateClassModal({
     event.preventDefault();
 
     setSubmitError(null);
+
+    if (!curriculumId) {
+      setSubmitError("Please choose a curriculum.");
+      return;
+    }
+
+    if (!levelId) {
+      setSubmitError("Please select a level first (or create one).");
+      return;
+    }
+
     setSubmitting(true);
     try {
       const res = await createAcademicClass({
@@ -356,13 +370,14 @@ export function CreateClassModal({
         code: code.trim(),
         description: description.trim() || undefined,
         levelId: String(levelId),
+        curriculumId: String(curriculumId),
       });
 
       onCreate(res.academicClass);
       setTitle("");
       setCode("");
       setDescription("");
-      setCurriculumId(defaultCurriculumId ?? fallbackCurriculumId);
+      setCurriculumId(defaultCurriculumId ?? "");
       setLevelId(fallbackLevelId);
       onClose();
     } catch (err) {
@@ -421,6 +436,9 @@ export function CreateClassModal({
             }}
             className="mt-2 w-full rounded-xl border border-white/10 bg-[#0f1117] px-4 py-3 text-sm text-white focus:border-emerald-400/70 focus:outline-none"
           >
+            <option value="" disabled>
+              Choose an option
+            </option>
             {curriculums.map((c) => (
               <option key={c._id} value={c._id}>
                 {c.title}
@@ -436,6 +454,7 @@ export function CreateClassModal({
           <select
             value={levelId}
             onChange={(e) => setLevelId(e.currentTarget.value)}
+            disabled={!availableLevels.length}
             className="mt-2 w-full rounded-xl border border-white/10 bg-[#0f1117] px-4 py-3 text-sm text-white focus:border-emerald-400/70 focus:outline-none"
           >
             {availableLevels.map((l) => (
@@ -446,7 +465,7 @@ export function CreateClassModal({
           </select>
           {!availableLevels.length ? (
             <p className="mt-2 text-sm text-white/50">
-              No levels found for this curriculum.
+              No levels found for this curriculum. Create a level first.
             </p>
           ) : null}
         </div>
@@ -731,6 +750,10 @@ export function CreateSubjectModal({
     event.preventDefault();
 
     setSubmitError(null);
+    if (!curriculumId) {
+      setSubmitError("Please choose a curriculum.");
+      return;
+    }
     setSubmitting(true);
     try {
       const res = await createSubject({
@@ -745,7 +768,7 @@ export function CreateSubjectModal({
       onCreate(res.subject);
       setTitle("");
       setDescription("");
-      setCurriculumId(defaultCurriculumId ?? fallbackCurriculumId);
+      setCurriculumId(defaultCurriculumId ?? "");
       setTargetLevelIds([]);
       setTargetClassIds([]);
       setTargetCombinationIds([]);
@@ -806,6 +829,9 @@ export function CreateSubjectModal({
             }}
             className="mt-2 w-full rounded-xl border border-white/10 bg-[#0f1117] px-4 py-3 text-sm text-white focus:border-emerald-400/70 focus:outline-none"
           >
+            <option value="" disabled>
+              Choose an option
+            </option>
             {curriculums.map((c) => (
               <option key={c._id} value={c._id}>
                 {c.title}
@@ -943,13 +969,9 @@ export function CreateCourseModal({
   onCreate: (course: Course) => void;
   defaultSubjectId?: ObjectIdString | null;
 }) {
-  const fallbackSubjectId = subjects[0]?._id ?? "";
-
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [subjectId, setSubjectId] = useState(
-    defaultSubjectId ?? fallbackSubjectId
-  );
+  const [subjectId, setSubjectId] = useState(defaultSubjectId ?? "");
   const [isPublished, setIsPublished] = useState(false);
   const [isSubmitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -958,6 +980,12 @@ export function CreateCourseModal({
     event.preventDefault();
 
     setSubmitError(null);
+
+    if (!subjectId) {
+      setSubmitError("Please choose a subject.");
+      return;
+    }
+
     setSubmitting(true);
     try {
       const res = await createCourse({
@@ -970,7 +998,7 @@ export function CreateCourseModal({
       onCreate(res.course);
       setTitle("");
       setDescription("");
-      setSubjectId(defaultSubjectId ?? fallbackSubjectId);
+      setSubjectId(defaultSubjectId ?? "");
       setIsPublished(false);
       onClose();
     } catch (err) {
@@ -1024,6 +1052,9 @@ export function CreateCourseModal({
             onChange={(e) => setSubjectId(e.currentTarget.value)}
             className="mt-2 w-full rounded-xl border border-white/10 bg-[#0f1117] px-4 py-3 text-sm text-white focus:border-emerald-400/70 focus:outline-none"
           >
+            <option value="" disabled>
+              Choose an option
+            </option>
             {subjects.map((s) => (
               <option key={s._id} value={s._id}>
                 {s.title}
