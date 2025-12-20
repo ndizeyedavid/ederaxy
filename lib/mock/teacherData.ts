@@ -110,6 +110,8 @@ export interface Video {
   originalFileName: string;
   mimeType: string;
   size: number;
+  thumbnailUrl?: string;
+  thumbnailOriginalFileName?: string;
   storageKey: string;
   originalPath: string;
   hlsDirectory: string;
@@ -229,6 +231,18 @@ export const mockSubjects: Subject[] = [
     targetClasses: [mockClasses[0]._id, mockClasses[1]._id],
     createdBy: mockTeacher._id,
     createdAt: "2025-10-22T08:10:00.000Z",
+    updatedAt: "2025-12-02T09:00:00.000Z",
+  },
+];
+
+export const mockCombinations: ClassCombination[] = [
+  {
+    _id: "674f22501c1a1c1a1c1a1c81",
+    title: "S1 STEM",
+    description: "General STEM combination for Senior 1.",
+    subjects: [mockSubjects[0]._id, mockSubjects[1]._id],
+    createdBy: mockTeacher._id,
+    createdAt: "2025-10-18T12:12:00.000Z",
     updatedAt: "2025-12-02T09:00:00.000Z",
   },
 ];

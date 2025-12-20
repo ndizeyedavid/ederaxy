@@ -57,6 +57,7 @@ function CourseCell({ data }: ICellRendererParams<CourseRow>) {
 }
 
 function UpdatedCell({ value }: ICellRendererParams<CourseRow, string>) {
+  // @ts-ignore
   const date = new Date(value);
   const text = Number.isNaN(date.getTime())
     ? value

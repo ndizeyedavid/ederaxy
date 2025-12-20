@@ -1,8 +1,14 @@
+"use client";
+
 import type { ReactNode } from "react";
 
 import Header from "@/components/Dashboard/Header";
 import Sidebar from "@/components/Dashboard/Sidebar";
 import { TeacherContentProvider } from "@/components/TeacherContent/TeacherContentProvider";
+import { me } from "@/lib/api/auth";
+import { clearAccessToken } from "@/lib/api/token";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 
 interface TeacherDashboardLayoutProps {
   children: ReactNode;
@@ -11,6 +17,35 @@ interface TeacherDashboardLayoutProps {
 export default function TeacherDashboardLayout({
   children,
 }: TeacherDashboardLayoutProps) {
+  const router = useRouter();
+  const [isCheckingAuth, setCheckingAuth] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      try {
+        await me();
+        if (!cancelled) setCheckingAuth(false);
+      } catch {
+        clearAccessToken();
+        if (!cancelled) router.replace("/dashboard/auth/login");
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [router]);
+
+  if (isCheckingAuth) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[#0d0f14] text-white">
+        <p className="text-sm text-white/70">Checking session...</p>
+      </div>
+    );
+  }
+
   return (
     <div className="flex min-h-screen flex-col bg-[#0d0f14] text-white">
       <Header />

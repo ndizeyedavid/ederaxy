@@ -15,8 +15,15 @@ export default function ContentSubjectsPage() {
   const searchParams = useSearchParams();
   const curriculumId = searchParams.get("curriculumId");
 
-  const { curriculums, levels, subjects, setSubjects, courses } =
-    useTeacherContentStore();
+  const {
+    curriculums,
+    levels,
+    classes,
+    combinations,
+    subjects,
+    setSubjects,
+    courses,
+  } = useTeacherContentStore();
   const [isCreateOpen, setCreateOpen] = useState(false);
 
   const activeCurriculum = useMemo(() => {
@@ -139,6 +146,8 @@ export default function ContentSubjectsPage() {
         onClose={() => setCreateOpen(false)}
         curriculums={curriculums}
         levels={levels}
+        classes={classes}
+        combinations={combinations}
         defaultCurriculumId={curriculumId}
         onCreate={(newSubject) => setSubjects((prev) => [newSubject, ...prev])}
       />
