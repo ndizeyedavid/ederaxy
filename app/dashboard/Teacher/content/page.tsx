@@ -368,16 +368,16 @@ export default function ContentVideosPage() {
 
       <ContentNavigation activeTab="Videos" />
 
-      <div
-        className="content-ag-grid ag-theme-quartz"
-        style={{ width: "100%" }}
-      >
+      <div className="ag-theme-quartz content-ag-grid h-[520px] rounded border border-white/5">
         <AgGridReact
           rowData={rows}
           columnDefs={columnDefs}
           defaultColDef={defaultColDef}
-          domLayout="autoHeight"
+          rowHeight={104}
+          headerHeight={52}
           suppressCellFocus
+          suppressDragLeaveHidesColumns
+          theme="legacy"
         />
       </div>
 
@@ -425,7 +425,7 @@ export default function ContentVideosPage() {
         </div>
       ) : null}
 
-      <style jsx>{`
+      <style jsx global>{`
         .content-ag-grid {
           --ag-background-color: #13151b;
           --ag-odd-row-background-color: rgba(255, 255, 255, 0.04);
@@ -433,13 +433,23 @@ export default function ContentVideosPage() {
           --ag-border-color: rgba(255, 255, 255, 0.08);
           --ag-foreground-color: rgba(255, 255, 255, 0.9);
           --ag-wrapping-header-text-color: rgba(255, 255, 255, 0.45);
+          background: var(--ag-background-color);
         }
 
         .content-ag-grid .ag-root-wrapper,
         .content-ag-grid .ag-root-wrapper-body,
         .content-ag-grid .ag-root {
-          background: transparent;
+          background: var(--ag-background-color) !important;
           box-shadow: none;
+        }
+
+        .content-ag-grid .ag-body-viewport,
+        .content-ag-grid .ag-center-cols-viewport,
+        .content-ag-grid .ag-header,
+        .content-ag-grid .ag-header-viewport,
+        .content-ag-grid .ag-header-row,
+        .content-ag-grid .ag-body-horizontal-scroll {
+          background: var(--ag-background-color) !important;
         }
 
         .content-ag-grid .ag-header-cell {
