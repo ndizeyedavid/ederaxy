@@ -1,10 +1,15 @@
 import Image from "next/image";
 import Link from "next/link";
 
-export default function ChannelVideoCard() {
+type ChannelVideoCardProps = {
+  lessonId?: string;
+};
+
+export default function ChannelVideoCard({ lessonId }: ChannelVideoCardProps) {
+  const watchHref = lessonId ? `/watch/${lessonId}` : "/watch";
   return (
     <article className="rounded-2xl hover:bg-[#141414] p-2 overflow-hidden cursor-pointer">
-      <Link href="/watch?v=<id>">
+      <Link href={watchHref}>
         <div className="relative aspect-video rounded-2xl overflow-hidden w-full">
           <Image
             src="/videos/ai-vs-ml-thumb.jpg"
@@ -20,7 +25,7 @@ export default function ChannelVideoCard() {
       </Link>
       <div className="px-1 py-3">
         <Link
-          href="/watch?v=<id>"
+          href={watchHref}
           className="line-clamp-2 text-lg font-semibold text-white"
         >
           Difference between machine learning and AI

@@ -7,6 +7,9 @@ import {
   History,
   List,
   ThumbsUp,
+  GraduationCap,
+  Layers,
+  LibraryBig,
   HelpCircle,
   MessageSquare,
   ChevronRight,
@@ -17,6 +20,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { usePathname, useSearchParams } from "next/navigation";
 
 const subscriptions = [
   { name: "KWIZERA Alexis", avatar: "/users/1.jpg", handle: "@kwizera" },
@@ -49,6 +53,27 @@ export default function Sidebar() {
     "idle" | "sending" | "success"
   >("idle");
 
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const browseTab = searchParams?.get("tab") || "forYou";
+
+  const isHome = pathname === "/";
+  const isBrowse = pathname === "/browse";
+  const isSubscriptions = pathname === "/feed/subscriptions";
+  const isHistory = pathname === "/feed/history";
+  const isLiked = pathname === "/feed/liked";
+  const isClips = pathname?.startsWith("/clips");
+
+  const navItem = (active: boolean) =>
+    `flex items-center gap-3 w-full px-3 py-2 rounded-lg font-medium text-base ${
+      active ? "bg-[#232323]" : "hover:bg-[#232323]"
+    }`;
+
+  const navItemSmall = (active: boolean) =>
+    `flex items-center gap-3 w-full px-2 py-2 rounded-lg ${
+      active ? "bg-[#232323]" : "hover:bg-[#232323]"
+    }`;
+
   const handleCloseFeedback = () => {
     setFeedbackOpen(false);
     setTimeout(() => {
@@ -75,16 +100,10 @@ export default function Sidebar() {
     >
       {/* Top: Home & Clips */}
       <div className="py-4 px-2 flex flex-col gap-1">
-        <Link
-          href="/"
-          className="flex items-center gap-3 w-full px-3 py-2 rounded-lg hover:bg-[#232323] font-medium text-base"
-        >
+        <Link href="/" className={navItem(isHome)}>
           <Home size={24} /> Home
         </Link>
-        <Link
-          href={"/clips/<id>"}
-          className="flex items-center gap-3 w-full px-3 py-2 rounded-lg hover:bg-[#232323]"
-        >
+        <Link href={"/clips/<id>"} className={navItem(isClips)}>
           <Film size={22} /> Short Clips
         </Link>
       </div>
@@ -93,7 +112,9 @@ export default function Sidebar() {
       <div className="px-4 py-2">
         <Link
           href="/feed/subscriptions"
-          className="flex items-center gap-2 mb-2 hover:bg-[#232323] w-full px-2 py-2 rounded-lg"
+          className={`flex items-center gap-2 mb-2 w-full px-2 py-2 rounded-lg ${
+            isSubscriptions ? "bg-[#232323]" : "hover:bg-[#232323]"
+          }`}
         >
           <span className="font-semibold text-[17px]">Subscriptions</span>
           <ChevronRight size={16} />
@@ -141,27 +162,49 @@ export default function Sidebar() {
           <span className="font-semibold text-lg">You</span>
         </div>
         <div className="flex flex-col gap-1">
-          <Link
-            href="/feed/history"
-            className="flex items-center gap-3 w-full px-2 py-2 rounded-lg hover:bg-[#232323]"
-          >
+          <Link href="/feed/history" className={navItemSmall(isHistory)}>
             <History size={20} /> History
           </Link>
           <Link
             href="/browse"
-            className="flex items-center gap-3 w-full px-2 py-2 rounded-lg hover:bg-[#232323]"
+            className={navItemSmall(isBrowse && browseTab === "forYou")}
           >
             <List size={20} /> Browse
           </Link>
-          <Link
-            href="/feed/liked"
-            className="flex items-center gap-3 w-full px-2 py-2 rounded-lg hover:bg-[#232323]"
-          >
+          <Link href="/feed/liked" className={navItemSmall(isLiked)}>
             <ThumbsUp size={20} /> Liked videos
           </Link>
         </div>
       </div>
       <hr className="border-[#222] my-2" />
+
+      <div className="px-4 py-2">
+        <div className="flex items-center justify-between mb-2">
+          <span className="font-semibold text-lg">Academics</span>
+        </div>
+        <div className="flex flex-col gap-1">
+          <Link
+            href="/browse?tab=curriculums"
+            className={navItemSmall(isBrowse && browseTab === "curriculums")}
+          >
+            <GraduationCap size={20} /> Curriculums
+          </Link>
+          <Link
+            href="/browse?tab=subjects"
+            className={navItemSmall(isBrowse && browseTab === "subjects")}
+          >
+            <Layers size={20} /> Subjects
+          </Link>
+          <Link
+            href="/browse?tab=courses"
+            className={navItemSmall(isBrowse && browseTab === "courses")}
+          >
+            <LibraryBig size={20} /> Courses
+          </Link>
+        </div>
+      </div>
+      <hr className="border-[#222] my-2" />
+
       {/* Settings & Help */}
       <div className="px-4 py-2 flex flex-col gap-1 mt-auto">
         <Link

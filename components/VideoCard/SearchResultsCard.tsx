@@ -9,6 +9,7 @@ type SearchResultsCardProps = {
   duration?: string;
   title?: string;
   href?: string;
+  lessonId?: string;
   views?: string;
   published?: string;
   category?: string;
@@ -24,7 +25,8 @@ export default function SearchResultsCard({
   thumbnail = "/videos/ai-vs-ml-thumb.jpg",
   duration = "4:11",
   title = "Calculus - Introduction to Calculus",
-  href = "/watch?v=<id>",
+  href = "/watch",
+  lessonId,
   views = "1.1M views",
   published = "1 year ago",
   category = "Secondary",
@@ -35,10 +37,11 @@ export default function SearchResultsCard({
   lesson = "Apply Mathematics At Workplace",
   unit = "Unit 1: Integration & Anti-derivative",
 }: SearchResultsCardProps) {
+  const watchHref = lessonId ? `/watch/${lessonId}` : href;
   return (
     <article className="group flex w-full flex-col cursor-pointer gap-4 rounded-3xl bg-[#101010] p-4 text-white transition hover:bg-[#151515] md:flex-row md:items-start md:p-5">
       <Link
-        href={href}
+        href={watchHref}
         className="relative w-full flex-1 overflow-hidden rounded-3xl md:w-[320px]"
       >
         <div className="relative h-[240px] w-full overflow-hidden">
@@ -58,7 +61,7 @@ export default function SearchResultsCard({
       <div className="flex flex-1/3 flex-col gap-3">
         <div className="flex flex-col gap-1 items-center md:flex-row md:items-start md:justify-between">
           <Link
-            href={href}
+            href={watchHref}
             className="text-lg font-semibold  hover:text-green-400 md:text-xl"
           >
             {title}

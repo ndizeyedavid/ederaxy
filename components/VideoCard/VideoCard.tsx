@@ -3,11 +3,16 @@ import Image from "next/image";
 import { MoreVertical } from "lucide-react";
 import Link from "next/link";
 
-export default function VideoCard() {
+type VideoCardProps = {
+  lessonId?: string;
+};
+
+export default function VideoCard({ lessonId }: VideoCardProps) {
+  const watchHref = lessonId ? `/watch/${lessonId}` : "/watch";
   return (
     <div className="transition-all p-2 hover:bg-[#232323] rounded-2xl overflow-hidden shadow-lg w-full max-w-xl">
       {/* Thumbnail */}
-      <Link href="/watch?v=<id>">
+      <Link href={watchHref}>
         <div className="relative w-full aspect-video">
           <Image
             src="/videos/ai-vs-ml-thumb.jpg"
@@ -35,7 +40,7 @@ export default function VideoCard() {
         {/* Details */}
         <div className="flex-1 min-w-0">
           <Link
-            href="/watch?v=<id>"
+            href={watchHref}
             className="text-white font-semibold leading-snug text-base line-clamp-2"
           >
             Difference between artificial intelligence and Machine learning.

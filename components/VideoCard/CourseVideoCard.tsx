@@ -15,6 +15,7 @@ type CourseVideoCardProps = {
   lesson?: string;
   unit?: string;
   href?: string;
+  lessonId?: string;
 };
 
 export default function CourseVideoCard({
@@ -27,15 +28,17 @@ export default function CourseVideoCard({
   grade = "Primary 5",
   lesson = "Elementary Science and Technology",
   unit = "Unit 1: How our body circulatory system works",
-  href = "/watch?v=<id>",
+  href = "/watch",
+  lessonId,
 }: CourseVideoCardProps) {
+  const watchHref = lessonId ? `/watch/${lessonId}` : href;
   return (
     <article className="group flex w-full items-center gap-1 rounded-2xl bg-[#111111] p-4 text-white transition hover:bg-[#151515]">
       <span className="w-5 text-sm font-semibold text-neutral-500">
         {index}
       </span>
 
-      <Link href={href} className="flex items-start gap-4 flex-1">
+      <Link href={watchHref} className="flex items-start gap-4 flex-1">
         <div className="relative h-32 w-56 shrink-0 overflow-hidden rounded-xl">
           <Image
             src={thumbnail}

@@ -38,6 +38,27 @@ export async function listCourses(options?: {
   return { courses };
 }
 
+export async function getCourse(courseId: string) {
+  const data = await apiFetch<any>(`/api/v1/courses/${courseId}`, {
+    method: "GET",
+  });
+
+  const c = data?.course ?? data;
+
+  const course: Course = {
+    _id: String(c._id ?? c.id ?? courseId),
+    title: String(c.title ?? ""),
+    description: c.description ?? undefined,
+    subject: getId(c.subjectId ?? c.subject) || "",
+    teacher: getId(c.teacherId ?? c.teacher ?? c.createdBy),
+    isPublished: Boolean(c.isPublished ?? false),
+    createdAt: String(c.createdAt ?? new Date().toISOString()),
+    updatedAt: String(c.updatedAt ?? c.createdAt ?? new Date().toISOString()),
+  };
+
+  return { course };
+}
+
 export async function createCourse(payload: {
   title: string;
   description?: string;
