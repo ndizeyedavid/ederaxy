@@ -39,7 +39,17 @@ interface LessonVideoRow {
 
 function ThumbnailCell({ data }: ICellRendererParams<LessonVideoRow>) {
   const row = data!;
-  const url = row.thumbnailUrl;
+  const rawUrl = row.thumbnailUrl;
+
+  const apiBaseUrl =
+    process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/+$/, "") ||
+    "http://localhost:8080";
+
+  const url = rawUrl
+    ? rawUrl.startsWith("http://") || rawUrl.startsWith("https://")
+      ? rawUrl
+      : `${apiBaseUrl}${rawUrl.startsWith("/") ? "" : "/"}${rawUrl}`
+    : undefined;
 
   return url ? (
     <img
