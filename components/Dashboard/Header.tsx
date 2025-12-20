@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -15,10 +15,65 @@ import {
   Search,
   Video,
 } from "lucide-react";
+import { ApiError } from "@/lib/api/client";
+import { me } from "@/lib/api/auth";
+
+function resolveBackendUrl(rawUrl?: string | null) {
+  if (!rawUrl) return undefined;
+  if (rawUrl.startsWith("http://") || rawUrl.startsWith("https://"))
+    return rawUrl;
+
+  const apiBaseUrl =
+    process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/+$/, "") ||
+    "http://localhost:8080";
+
+  return `${apiBaseUrl}${rawUrl.startsWith("/") ? "" : "/"}${rawUrl}`;
+}
 
 export default function Header() {
   const [isCreateOpen, setCreateOpen] = useState(false);
   const createMenuRef = useRef<HTMLDivElement | null>(null);
+  const [user, setUser] = useState<{ profilePicture?: string | null } | null>(
+    null
+  );
+  const [userLoading, setUserLoading] = useState(true);
+  const [userError, setUserError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const u = await me();
+        if (!cancelled) setUser(u);
+      } catch (err) {
+        if (!cancelled) {
+          if (err instanceof ApiError && err.statusCode === 401) {
+            // Not logged in; ignore silently
+            setUserError(null);
+          } else {
+            setUserError(
+              err instanceof Error ? err.message : "Failed to load user"
+            );
+          }
+        }
+      } finally {
+        if (!cancelled) setUserLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const profileSrc = useMemo(() => {
+    if (userLoading || userError) return undefined;
+    // @ts-ignore
+    const raw = user?.user?.profilePicture;
+    // console.log(user.user);
+    const resolved = resolveBackendUrl(raw);
+
+    return resolved;
+  }, [user, userLoading, userError]);
 
   useEffect(() => {
     if (!isCreateOpen) return;
@@ -155,13 +210,30 @@ export default function Header() {
           className="hidden size-9 overflow-hidden rounded-full border border-white/10 bg-white/5 transition hover:border-white/20 hover:bg-white/10 md:block"
           aria-label="Account"
         >
-          <Image
-            src="/users/2.jpeg"
-            alt="Profile"
-            width={44}
-            height={44}
-            className="size-full object-cover"
-          />
+          {profileSrc ? (
+            <Image
+              src={profileSrc}
+              alt="Profile"
+              width={44}
+              height={44}
+              className="size-full object-cover"
+              unoptimized
+              onError={(e) => {
+                // Fallback to default avatar on image load error
+                const target = e.target as HTMLImageElement;
+                target.src = "/users/default-avatar.svg";
+              }}
+            />
+          ) : (
+            <Image
+              src="/users/default-avatar.svg"
+              alt="Profile"
+              width={44}
+              height={44}
+              className="size-full object-cover"
+              unoptimized
+            />
+          )}
         </button>
       </div>
     </header>

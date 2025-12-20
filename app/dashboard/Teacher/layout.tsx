@@ -9,6 +9,7 @@ import { me } from "@/lib/api/auth";
 import { clearAccessToken } from "@/lib/api/token";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { Loader } from "lucide-react";
 
 interface TeacherDashboardLayoutProps {
   children: ReactNode;
@@ -40,8 +41,9 @@ export default function TeacherDashboardLayout({
 
   if (isCheckingAuth) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#0d0f14] text-white">
-        <p className="text-sm text-white/70">Checking session...</p>
+      <div className="flex flex-col min-h-screen items-center justify-center bg-[#0d0f14] text-white">
+        <Loader className="animate-spin" size={24} />
+        <p className="text-sm text-white/70 mt-1">Loading your dashbord...</p>
       </div>
     );
   }
