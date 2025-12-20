@@ -13,10 +13,15 @@ import {
   Menu,
   Scissors,
   Search,
+  User,
   Video,
+  LogOut,
+  Settings,
 } from "lucide-react";
 import { ApiError } from "@/lib/api/client";
 import { me } from "@/lib/api/auth";
+import { clearAccessToken } from "@/lib/api/token";
+import { useRouter } from "next/navigation";
 
 function resolveBackendUrl(rawUrl?: string | null) {
   if (!rawUrl) return undefined;
@@ -31,8 +36,11 @@ function resolveBackendUrl(rawUrl?: string | null) {
 }
 
 export default function Header() {
+  const router = useRouter();
   const [isCreateOpen, setCreateOpen] = useState(false);
   const createMenuRef = useRef<HTMLDivElement | null>(null);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const profileMenuRef = useRef<HTMLDivElement | null>(null);
   const [user, setUser] = useState<{ profilePicture?: string | null } | null>(
     null
   );
@@ -44,6 +52,7 @@ export default function Header() {
     (async () => {
       try {
         const u = await me();
+        // @ts-ignore
         if (!cancelled) setUser(u);
       } catch (err) {
         if (!cancelled) {
@@ -74,6 +83,41 @@ export default function Header() {
 
     return resolved;
   }, [user, userLoading, userError]);
+
+  // Profile dropdown close handlers
+  useEffect(() => {
+    if (!isProfileOpen) return;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!profileMenuRef.current) return;
+      if (
+        event.target instanceof Node &&
+        !profileMenuRef.current.contains(event.target)
+      ) {
+        setIsProfileOpen(false);
+      }
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsProfileOpen(false);
+      }
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isProfileOpen]);
+
+  const handleLogout = () => {
+    if (!confirm("Are you sure you want to logout?")) return;
+    clearAccessToken();
+    router.push("/dashboard/auth/login");
+  };
 
   useEffect(() => {
     if (!isCreateOpen) return;
@@ -205,36 +249,76 @@ export default function Header() {
             </div>
           ) : null}
         </div>
-        <button
-          type="button"
-          className="hidden size-9 overflow-hidden rounded-full border border-white/10 bg-white/5 transition hover:border-white/20 hover:bg-white/10 md:block"
-          aria-label="Account"
-        >
-          {profileSrc ? (
-            <Image
-              src={profileSrc}
-              alt="Profile"
-              width={44}
-              height={44}
-              className="size-full object-cover"
-              unoptimized
-              onError={(e) => {
-                // Fallback to default avatar on image load error
-                const target = e.target as HTMLImageElement;
-                target.src = "/users/default-avatar.svg";
-              }}
-            />
-          ) : (
-            <Image
-              src="/users/default-avatar.svg"
-              alt="Profile"
-              width={44}
-              height={44}
-              className="size-full object-cover"
-              unoptimized
-            />
-          )}
-        </button>
+        <div className="relative hidden md:block" ref={profileMenuRef}>
+          <button
+            type="button"
+            onClick={() => setIsProfileOpen((prev) => !prev)}
+            className="hidden size-9 overflow-hidden rounded-full border border-white/10 bg-white/5 transition hover:border-white/20 hover:bg-white/10 md:block"
+            aria-label="Account"
+            aria-haspopup="menu"
+            aria-expanded={isProfileOpen}
+          >
+            {profileSrc ? (
+              <Image
+                src={profileSrc}
+                alt="Profile"
+                width={44}
+                height={44}
+                className="size-full object-cover"
+                unoptimized
+                onError={(e) => {
+                  // Fallback to default avatar on image load error
+                  const target = e.target as HTMLImageElement;
+                  target.src = "/users/default-avatar.svg";
+                }}
+              />
+            ) : (
+              <Image
+                src="/users/default-avatar.svg"
+                alt="Profile"
+                width={44}
+                height={44}
+                className="size-full object-cover"
+                unoptimized
+              />
+            )}
+          </button>
+
+          {isProfileOpen ? (
+            <div
+              role="menu"
+              className="absolute right-0 mt-2 w-48 overflow-hidden rounded-2xl border border-white/10 bg-[#14161d] shadow-[0_20px_60px_rgba(0,0,0,0.55)]"
+            >
+              <Link
+                role="menuitem"
+                href="/dashboard/Teacher/profile"
+                onClick={() => setIsProfileOpen(false)}
+                className="flex w-full items-center gap-3 px-4 py-3 text-sm font-semibold text-white/80 transition hover:bg-white/5 hover:text-white"
+              >
+                <User className="size-4" />
+                Profile
+              </Link>
+              <Link
+                role="menuitem"
+                href="/dashboard/Teacher/settings"
+                onClick={() => setIsProfileOpen(false)}
+                className="flex w-full items-center gap-3 px-4 py-3 text-sm font-semibold text-white/80 transition hover:bg-white/5 hover:text-white"
+              >
+                <Settings className="size-4" />
+                Settings
+              </Link>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={handleLogout}
+                className="flex w-full items-center gap-3 px-4 py-3 text-sm font-semibold text-white/80 transition hover:bg-white/5 hover:text-white"
+              >
+                <LogOut className="size-4" />
+                Logout
+              </button>
+            </div>
+          ) : null}
+        </div>
       </div>
     </header>
   );
