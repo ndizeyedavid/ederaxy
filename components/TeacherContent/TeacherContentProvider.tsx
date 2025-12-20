@@ -74,25 +74,18 @@ export function TeacherContentProvider({ children }: { children: ReactNode }) {
         if (cancelled) return;
         setCurriculums(curriculumsRes.curriculums);
 
-        const [
-          combosRes,
-          levelsRes,
-          classesRes,
-          coursesRes,
-          lessonsRes,
-          subjectsRes,
-        ] = await Promise.allSettled([
-          listClassCombinations(),
-          listAcademicLevels(),
-          listAcademicClasses(),
-          listCourses(),
-          listLessons(),
-          Promise.all(
-            curriculumsRes.curriculums.map((c) =>
-              listSubjectsByCurriculum(c._id)
-            )
-          ),
-        ]);
+        const [combosRes, levelsRes, classesRes, coursesRes, subjectsRes] =
+          await Promise.allSettled([
+            listClassCombinations(),
+            listAcademicLevels(),
+            listAcademicClasses(),
+            listCourses(),
+            Promise.all(
+              curriculumsRes.curriculums.map((c) =>
+                listSubjectsByCurriculum(c._id)
+              )
+            ),
+          ]);
 
         if (cancelled) return;
 
@@ -108,9 +101,24 @@ export function TeacherContentProvider({ children }: { children: ReactNode }) {
         setCourses(
           coursesRes.status === "fulfilled" ? coursesRes.value.courses : []
         );
-        setLessons(
-          lessonsRes.status === "fulfilled" ? lessonsRes.value.lessons : []
-        );
+
+        if (coursesRes.status === "fulfilled") {
+          const lessonResults = await Promise.allSettled(
+            coursesRes.value.courses.map((c) =>
+              listLessons({ courseId: c._id })
+            )
+          );
+          if (cancelled) return;
+
+          const merged = lessonResults.flatMap((r) =>
+            r.status === "fulfilled" ? r.value.lessons : []
+          );
+          const byId = new Map<string, Lesson>();
+          merged.forEach((l) => byId.set(l._id, l));
+          setLessons(Array.from(byId.values()));
+        } else {
+          setLessons([]);
+        }
 
         if (subjectsRes.status === "fulfilled") {
           const merged = subjectsRes.value.flatMap((r) => r.subjects);
