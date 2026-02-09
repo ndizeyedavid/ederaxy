@@ -54,6 +54,33 @@ export async function listLessons(options?: { courseId?: string }) {
   return { lessons };
 }
 
+export async function getLesson(lessonId: string) {
+  const data = await apiFetch<any>(`/api/v1/lessons/${lessonId}`, {
+    method: "GET",
+  });
+
+  const l = data?.lesson ?? data;
+
+  const lesson: Lesson = {
+    _id: String(l._id ?? l.id ?? lessonId),
+    title: String(l.title ?? ""),
+    description: l.description ?? undefined,
+    order: Number(l.order ?? 1),
+    course: getId(l.courseId ?? l.course) || "",
+    resources: Array.isArray(l.resources)
+      ? (l.resources as any[]).map((r) => ({
+          label: String(r.label ?? ""),
+          url: String(r.url ?? ""),
+        }))
+      : undefined,
+    video: getId(l.videoId ?? l.video) || null,
+    createdAt: String(l.createdAt ?? new Date().toISOString()),
+    updatedAt: String(l.updatedAt ?? l.createdAt ?? new Date().toISOString()),
+  };
+
+  return { lesson };
+}
+
 export async function createLesson(payload: {
   title: string;
   description?: string;

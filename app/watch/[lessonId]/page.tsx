@@ -18,6 +18,8 @@ import Header from "@/components/Header/Header";
 import Sidebar from "@/components/Sidebar/Sidebar";
 import { ApiError } from "@/lib/api/client";
 import { getLessonVideo, type LessonVideo } from "@/lib/api/video";
+import { listLessons } from "@/lib/api/lessons";
+import { listCourses } from "@/lib/api/courses";
 
 function resolveBackendUrl(rawUrl?: string | null) {
   if (!rawUrl) return undefined;
@@ -49,6 +51,19 @@ export default function WatchLessonPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const [lessonTitle, setLessonTitle] = useState<string | null>(null);
+  const [courseId, setCourseId] = useState<string | null>(null);
+  const [courseLessons, setCourseLessons] = useState<
+    { _id: string; title: string }[]
+  >([]);
+  const [suggested, setSuggested] = useState<
+    {
+      lessonId: string;
+      title: string;
+      thumb?: string;
+    }[]
+  >([]);
+
   useEffect(() => {
     let cancelled = false;
 
@@ -62,9 +77,38 @@ export default function WatchLessonPage() {
       setLoading(true);
       setError(null);
       try {
-        const res = await getLessonVideo(lessonId);
+        const videoRes = await getLessonVideo(lessonId);
         if (cancelled) return;
-        setVideo(res.video);
+        setVideo(videoRes.video);
+
+        // Derive lesson title + courseId using supported endpoints.
+        const { courses } = await listCourses();
+        let foundCourseId: string | null = null;
+        let foundTitle: string | null = null;
+        let foundLessons: { _id: string; title: string }[] = [];
+
+        for (const c of courses) {
+          try {
+            const res = await listLessons({ courseId: c._id });
+            const hit = res.lessons.find((l) => l._id === lessonId);
+            if (hit) {
+              foundCourseId = c._id;
+              foundTitle = hit.title;
+              foundLessons = res.lessons.map((l) => ({
+                _id: l._id,
+                title: l.title,
+              }));
+              break;
+            }
+          } catch {
+            continue;
+          }
+        }
+
+        if (cancelled) return;
+        setCourseId(foundCourseId);
+        setLessonTitle(foundTitle);
+        setCourseLessons(foundLessons);
       } catch (err) {
         if (cancelled) return;
         if (err instanceof ApiError) {
@@ -73,6 +117,9 @@ export default function WatchLessonPage() {
           setError(err instanceof Error ? err.message : "Failed to load video");
         }
         setVideo(null);
+        setLessonTitle(null);
+        setCourseId(null);
+        setCourseLessons([]);
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -82,6 +129,47 @@ export default function WatchLessonPage() {
       cancelled = true;
     };
   }, [lessonId]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!courseId) {
+      setSuggested([]);
+      return;
+    }
+
+    (async () => {
+      try {
+        const others = courseLessons
+          .filter((l) => l._id && l._id !== lessonId)
+          .slice(0, 7);
+
+        const items = await Promise.all(
+          others.map(async (l) => {
+            try {
+              const v = await getLessonVideo(l._id);
+              return {
+                lessonId: l._id,
+                title: l.title,
+                thumb: v.video.thumbnailUrl ?? undefined,
+              };
+            } catch {
+              return { lessonId: l._id, title: l.title };
+            }
+          })
+        );
+
+        if (cancelled) return;
+        setSuggested(items);
+      } catch {
+        if (!cancelled) setSuggested([]);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [courseId, courseLessons, lessonId]);
 
   const status = video?.status ?? null;
 
@@ -94,16 +182,17 @@ export default function WatchLessonPage() {
 
   const suggestedVideos = useMemo(
     () =>
-      new Array(7).fill(null).map((_, idx) => ({
-        id: `s-${idx + 1}`,
-        title: "Lesson preview title goes here",
-        teacher: "Teacher name",
-        views: "3.2K views",
-        thumb: "/videos/ai-vs-ml-thumb.jpg",
-        href: "/watch",
-        duration: "6:47",
+      suggested.map((s) => ({
+        id: s.lessonId,
+        title: s.title,
+        teacher: "",
+        views: "",
+        thumb: s.thumb ?? "/videos/ai-vs-ml-thumb.jpg",
+        href: `/watch/${s.lessonId}`,
+        duration: "",
+        isRemoteThumb: Boolean(s.thumb),
       })),
-    []
+    [suggested]
   );
 
   return (
@@ -177,8 +266,7 @@ export default function WatchLessonPage() {
                   ) : (
                     <>
                       <h1 className="text-xl font-semibold leading-snug text-white md:text-2xl">
-                        Lesson title placeholder (replace with real lesson
-                        title)
+                        {lessonTitle ?? "Lesson"}
                       </h1>
                       <p className="text-xs text-white/50">ID: {lessonId}</p>
                     </>
@@ -268,6 +356,10 @@ export default function WatchLessonPage() {
                             alt={s.title}
                             fill
                             sizes="132px"
+                            unoptimized={
+                              Boolean((s as any).isRemoteThumb) ||
+                              s.thumb.startsWith("http")
+                            }
                             className="object-cover"
                           />
                           <div className="pointer-events-none absolute inset-0 opacity-0 transition group-hover:opacity-100">
@@ -289,12 +381,16 @@ export default function WatchLessonPage() {
                           <p className="line-clamp-2 text-sm font-semibold text-white group-hover:text-white/90">
                             {s.title}
                           </p>
-                          <p className="mt-1 text-xs text-neutral-400">
-                            {s.teacher}
-                          </p>
-                          <p className="mt-1 text-xs text-neutral-500">
-                            {s.views}
-                          </p>
+                          {s.teacher ? (
+                            <p className="mt-1 text-xs text-neutral-400">
+                              {s.teacher}
+                            </p>
+                          ) : null}
+                          {s.views ? (
+                            <p className="mt-1 text-xs text-neutral-500">
+                              {s.views}
+                            </p>
+                          ) : null}
                         </div>
                       </Link>
                     ))}

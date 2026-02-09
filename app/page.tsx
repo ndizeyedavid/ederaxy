@@ -15,11 +15,12 @@ import { useEffect, useState } from "react";
 import { ApiError } from "@/lib/api/client";
 import { listCourses } from "@/lib/api/courses";
 import { listLessons } from "@/lib/api/lessons";
+import { getLessonVideo } from "@/lib/api/video";
 
 export default function Home() {
-  const [recommendedLessonIds, setRecommendedLessonIds] = useState<string[]>(
-    []
-  );
+  const [recommended, setRecommended] = useState<
+    { lessonId: string; title?: string; thumbnailUrl?: string }[]
+  >([]);
   const [recommendedError, setRecommendedError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -31,19 +32,35 @@ export default function Home() {
         const { courses } = await listCourses();
         const topCourses = courses.slice(0, 6);
 
-        const lessonIds: string[] = [];
+        const base: { lessonId: string; title?: string }[] = [];
         for (const c of topCourses) {
           try {
             const { lessons } = await listLessons({ courseId: c._id });
             const first = lessons[0];
-            if (first?._id) lessonIds.push(first._id);
+            if (first?._id)
+              base.push({ lessonId: first._id, title: first.title });
           } catch {
             continue;
           }
         }
 
+        const cards = await Promise.all(
+          base.map(async (item) => {
+            try {
+              const videoRes = await getLessonVideo(item.lessonId);
+              return {
+                lessonId: item.lessonId,
+                title: item.title,
+                thumbnailUrl: videoRes.video.thumbnailUrl ?? undefined,
+              };
+            } catch {
+              return { lessonId: item.lessonId, title: item.title };
+            }
+          })
+        );
+
         if (cancelled) return;
-        setRecommendedLessonIds(lessonIds);
+        setRecommended(cards);
       } catch (err) {
         if (cancelled) return;
         setRecommendedError(
@@ -215,9 +232,14 @@ export default function Home() {
                   <div className="sm:col-span-2 lg:col-span-3 rounded-3xl border border-white/10 bg-white/5 p-6 text-sm text-white/60">
                     {recommendedError}
                   </div>
-                ) : recommendedLessonIds.length ? (
-                  recommendedLessonIds.map((lessonId) => (
-                    <VideoCard key={lessonId} lessonId={lessonId} />
+                ) : recommended.length ? (
+                  recommended.map((item) => (
+                    <VideoCard
+                      key={item.lessonId}
+                      lessonId={item.lessonId}
+                      title={item.title}
+                      thumbnailUrl={item.thumbnailUrl}
+                    />
                   ))
                 ) : (
                   <>
